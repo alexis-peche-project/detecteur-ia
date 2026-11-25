@@ -34,6 +34,8 @@
 
   <fieldset class="opts">
     <legend class="sr">Méthodes d'analyse</legend>
+    <label class="opt" id="optClf"><input type="checkbox" id="useClf" checked>
+      <span><b>Détecteur entraîné</b><small id="clfNote">Réseau de neurones entraîné à reconnaître les textes d'IA, comme GPTZero ou Pangram. Environ 150 Mo téléchargés une seule fois. Pour l'anglais, le site utilise aussi MELD, l'un des meilleurs détecteurs open source.</small></span></label>
     <label class="opt"><input type="checkbox" id="useLm" checked>
       <span><b>Modèle de langage local</b><small>Perplexité et courbure de probabilité (méthode Fast-DetectGPT), calculées dans votre navigateur. Environ 500 Mo téléchargés une seule fois, puis gardés en cache.</small></span></label>
     <label class="opt"><input type="checkbox" id="useJudge">
@@ -54,6 +56,8 @@
   </details>
 
   <div id="status" class="status hidden" role="status" aria-live="polite">
+    <div class="stage" id="stClf"><span>Détecteur entraîné</span><div class="pbar"><i></i></div><em></em></div>
+    <div class="stage" id="stMeld"><span>MELD (anglais)</span><div class="pbar"><i></i></div><em></em></div>
     <div class="stage" id="stHeur"><span>Signes et style</span><div class="pbar"><i></i></div><em></em></div>
     <div class="stage" id="stLm"><span>Modèle de langage</span><div class="pbar"><i></i></div><em></em></div>
     <div class="stage" id="stJudge"><span>Vérification par IA</span><div class="pbar"><i></i></div><em></em></div>
@@ -97,14 +101,21 @@
   </div>
 </div></section>
 
+<section class="band perf" id="perf"><div class="wrap">
+  <h2>Fiabilité mesurée</h2>
+  <p class="lead" id="perfLead">Chaque méthode est testée sur des textes dont on connaît l'origine, jamais utilisés pour son réglage. On mesure la part de textes d'IA repérés quand on n'accepte qu'un texte humain accusé à tort sur 100, la mesure utilisée par RAID, Pangram et GPTZero.</p>
+  <div id="perfBody"></div>
+</div></section>
+
 <section class="band method"><div class="wrap">
   <h2>Comment fonctionne l'analyse</h2>
   <div class="grid3">
-    <div><h3>1. Modèle de langage</h3><p>Le texte est lu par Qwen2.5-0.5B, un petit modèle de langage multilingue qui tourne dans votre navigateur. Pour chaque mot, on calcule la probabilité que le modèle l'aurait choisi. Un texte d'IA choisit presque toujours les mots les plus attendus : sa perplexité est basse. La courbure de probabilité (Fast-DetectGPT, ICLR 2024) compare chaque choix aux alternatives possibles ; c'est la mesure la plus fiable des trois. La burstiness mesure la variation de cette perplexité entre les phrases.</p></div>
-    <div><h3>2. Vérification par IA</h3><p>Comme les grands détecteurs commerciaux, le site peut faire relire le texte par un grand modèle (Claude, GPT ou Mistral). Il reçoit les critères du guide Wikipédia, rend une probabilité et cite les passages qui l'ont convaincu. Les longs documents sont envoyés en plusieurs morceaux répartis dans le texte.</p></div>
-    <div><h3>3. Signes Wikipédia et style</h3><p>Le WikiProject AI Cleanup recense les tics des chatbots : vocabulaire gonflé, parallélisme négatif, triplets, remarques éditoriales, conclusions répétées, formules d'assistant, tirets et gras en excès. On mesure aussi la régularité des phrases et des paragraphes.</p></div>
+    <div><h3>1. Détecteur entraîné</h3><p>C'est la méthode des grands services (GPTZero, Pangram). Un encodeur multilingue (mmBERT) a été entraîné sur des milliers de textes français écrits par des humains avant 2023 et sur leurs « miroirs » : le même sujet, le même genre et la même longueur, rédigés par plusieurs IA. On le réentraîne ensuite sur ses propres erreurs (recherche d'exemples difficiles). Pour l'anglais, le site interroge aussi MELD, premier détecteur open source du banc d'essai RAID.</p></div>
+    <div><h3>2. Modèle de langage</h3><p>Le texte est lu par Qwen2.5-0.5B, un petit modèle de langage multilingue qui tourne dans votre navigateur. Pour chaque mot, on calcule la probabilité que le modèle l'aurait choisi. Un texte d'IA choisit presque toujours les mots les plus attendus : sa perplexité est basse. La courbure de probabilité (Fast-DetectGPT, ICLR 2024) compare chaque choix aux alternatives possibles ; c'est la mesure la plus fiable des trois. La burstiness mesure la variation de cette perplexité entre les phrases.</p></div>
+    <div><h3>3. Vérification par IA</h3><p>Comme les grands détecteurs commerciaux, le site peut faire relire le texte par un grand modèle (Claude, GPT ou Mistral). Il reçoit les critères du guide Wikipédia, rend une probabilité et cite les passages qui l'ont convaincu. Les longs documents sont envoyés en plusieurs morceaux répartis dans le texte.</p></div>
+    <div><h3>4. Signes Wikipédia et style</h3><p>Le WikiProject AI Cleanup recense les tics des chatbots : vocabulaire gonflé, parallélisme négatif, triplets, remarques éditoriales, conclusions répétées, formules d'assistant, tirets et gras en excès. On mesure aussi la régularité des phrases et des paragraphes.</p></div>
   </div>
-  <p class="weights">Score final : moyenne pondérée des méthodes actives (modèle de langage 50 %, vérification par IA 30 %, signes et style 20 %). Une formule d'assistant oubliée ou un artefact de chatbot porte le score à 85 % minimum.</p>
+  <p class="weights" id="weightsNote">Score final : combinaison des méthodes actives, réglée par le banc d'essai (régression logistique). Le verdict « IA » n'est donné qu'au-delà du seuil qui limite les faux positifs à 1 % sur nos textes de test. Une formule d'assistant oubliée ou un artefact de chatbot porte le score à 85 % minimum.</p>
 
   <details class="calib" id="calib">
     <summary>Calibration (pour aller plus loin)</summary>

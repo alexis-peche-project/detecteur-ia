@@ -1,8 +1,8 @@
 import { analyseHeuristics, splitSentences, words } from './heuristics.js';
-import { lmSummary, ensemble, verdict, calibrate } from './scoring.js';
+import { lmSummary, ensemble, verdict, calibrate, calibratedEnsemble, detectLang } from './scoring.js';
 import { judge, PROVIDERS } from './llm-judge.js';
 import { extractText, ACCEPT } from './docs.js';
-import { RELAY_URL, WEIGHTS, DEFAULT_CALIBRATION } from './config.js';
+import { RELAY_URL, MELD_URL, CLASSIFIER_ID, WEIGHTS, DEFAULT_CALIBRATION } from './config.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -17,17 +17,19 @@ let calib = (() => { try { return JSON.parse(store.get('detia-calib')) || DEFAUL
 let last = null;
 let abort = null;
 
-/* ---------- Modèle de langage (Web Worker) ---------- */
-let worker = null;
-const dl = {};
-function getWorker() {
-  if (worker) return worker;
-  worker = new Worker(new URL('./lm-worker.js', import.meta.url), { type: 'module' });
-  return worker;
+/* ---------- Workers : modèle de langage et détecteur entraîné ---------- */
+const workers = {};
+const dl = { lm: {}, clf: {} };
+function getWorker(kind) {
+  if (!workers[kind]) {
+    const file = kind === 'lm' ? './lm-worker.js' : './classifier-worker.js';
+    workers[kind] = new Worker(new URL(file, import.meta.url), { type: 'module' });
+  }
+  return workers[kind];
 }
-function runLm(sentences, maxChunks, onEvent) {
+function runWorker(kind, msg, onEvent) {
   return new Promise((resolve, reject) => {
-    const w = getWorker();
+    const w = getWorker(kind);
     w.onmessage = e => {
       const m = e.data;
       if (m.type === 'result') resolve(m);
@@ -35,9 +37,48 @@ function runLm(sentences, maxChunks, onEvent) {
       else if (m.type === 'cancelled') reject(new Error('Analyse annulée.'));
       else onEvent?.(m);
     };
-    w.onerror = e => reject(new Error(e.message || 'Le modèle de langage n\'a pas pu démarrer.'));
-    w.postMessage({ type: 'analyse', sentences, maxChunks });
+    w.onerror = e => reject(new Error(e.message || 'Le modèle n\'a pas pu démarrer.'));
+    w.postMessage({ type: 'analyse', ...msg });
   });
+}
+const runLm = (sentences, maxChunks, onEvent) => runWorker('lm', { sentences, maxChunks }, onEvent);
+function dlMsg(kind, m) {
+  dl[kind][m.file] = m;
+  const all = Object.values(dl[kind]), L = all.reduce((a, x) => a + x.loaded, 0), T = all.reduce((a, x) => a + x.total, 0);
+  return { p: T ? L / T : 0, msg: `Téléchargement du modèle : ${Math.round(L / 1e6)} / ${Math.round(T / 1e6)} Mo` };
+}
+
+/* ---------- Réglages issus du banc d'essai ---------- */
+let CAL = null;
+const classifierId = () => CLASSIFIER_ID || (CAL?.classifieur?.id && !/^[./]/.test(CAL.classifieur.id) ? CAL.classifieur.id : '');
+function updClfOption() {
+  const ok = !!classifierId();
+  $('useClf').disabled = !ok;
+  $('optClf').classList.toggle('dis', !ok);
+  if (!ok) {
+    $('useClf').checked = false;
+    $('clfNote').textContent = 'Pas encore disponible : le modèle doit d\'abord être entraîné (dossier entrainement/ du projet).' + (MELD_URL ? ' Les textes en anglais sont tout de même analysés par MELD.' : '');
+  }
+}
+async function loadCalibration() {
+  try {
+    const r = await fetch('js/calibration.json', { cache: 'no-cache' });
+    if (r.ok) CAL = await r.json();
+  } catch { /* pas encore de banc d'essai */ }
+  if (CAL?.lm && !store.get('detia-calib')) calib = CAL.lm;
+  updClfOption();
+  calState();
+  renderPerf();
+}
+
+/* ---------- MELD (serveur, anglais) ---------- */
+async function runMeld(text, signal) {
+  const r = await fetch(MELD_URL.replace(/\/$/, '') + '/score', {
+    method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text })
+  });
+  const b = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(b.detail || `Serveur MELD : erreur ${r.status}`);
+  return b;
 }
 
 /* ---------- Interface : saisie et documents ---------- */
@@ -119,6 +160,9 @@ async function analyse() {
   const text = txt.value;
   if (!words(text).length) { txt.focus(); return; }
   const useLm = $('useLm').checked, useJudge = $('useJudge').checked, full = $('scope').value === 'full';
+  const useClf = $('useClf').checked && !!classifierId();
+  const lang = detectLang(text);
+  const useMeld = !!MELD_URL && lang === 'en' && words(text).length >= 30;
   saveProvider();
   abort = new AbortController();
   $('go').disabled = true;
@@ -126,20 +170,48 @@ async function analyse() {
   $('cancel').classList.remove('hidden');
 
   const sentences = splitSentences(text);
-  const res = { text, sentences, heur: analyseHeuristics(text), lm: null, lmMeta: null, judge: null, errors: {} };
+  const res = { text, sentences, lang, heur: analyseHeuristics(text), lm: null, lmMeta: null, judge: null, clf: null, meld: null, errors: {},
+    use: { clf: useClf, meld: useMeld, lm: useLm, judge: useJudge } };
   last = res;
   stage('stHeur', { p: 1, msg: 'Terminé', state: 'done' });
+  stage('stClf', { on: useClf, msg: useClf ? 'En attente' : (classifierId() ? 'Désactivé' : 'Pas encore entraîné') });
+  stage('stMeld', { on: useMeld, msg: useMeld ? 'En attente' : (MELD_URL ? 'Texte non anglais' : 'Serveur non configuré') });
   stage('stLm', { on: useLm, msg: useLm ? 'En attente' : 'Désactivé' });
   stage('stJudge', { on: useJudge, msg: useJudge ? 'En attente' : 'Désactivée' });
   render(res);
 
   const tasks = [];
+  if (useClf) {
+    tasks.push(runWorker('clf', { id: classifierId(), sentences: sentences.map(s => s.text), maxWindows: full ? 0 : 16 }, m => {
+      if (m.type === 'download') stage('stClf', dlMsg('clf', m));
+      else if (m.type === 'ready') stage('stClf', { p: 0, msg: 'Modèle prêt' });
+      else if (m.type === 'progress') stage('stClf', { p: m.done / m.total, msg: `Fenêtre ${m.done} sur ${m.total}` });
+    }).then(r => {
+      res.clf = r;
+      stage('stClf', { p: 1, msg: `${r.windowsAnalysed} fenêtre(s) sur ${r.windowsTotal}`, state: 'done' });
+      render(res);
+    }).catch(err => {
+      res.errors.clf = err.message;
+      stage('stClf', { p: 0, msg: err.message, state: 'err' });
+      render(res);
+    }));
+  }
+  if (useMeld) {
+    stage('stMeld', { p: 0.1, msg: 'Envoi au serveur MELD…' });
+    tasks.push(runMeld(text, abort.signal).then(r => {
+      res.meld = r;
+      stage('stMeld', { p: 1, msg: `${r.tokens} tokens analysés`, state: 'done' });
+      render(res);
+    }).catch(err => {
+      res.errors.meld = err.name === 'AbortError' ? 'Analyse annulée.' : err.message;
+      stage('stMeld', { p: 0, msg: res.errors.meld, state: 'err' });
+      render(res);
+    }));
+  }
   if (useLm) {
     tasks.push(runLm(sentences.map(s => s.text), full ? 0 : 12, m => {
       if (m.type === 'download') {
-        dl[m.file] = m;
-        const all = Object.values(dl), L = all.reduce((a, x) => a + x.loaded, 0), T = all.reduce((a, x) => a + x.total, 0);
-        stage('stLm', { p: L / T, msg: `Téléchargement du modèle : ${Math.round(L / 1e6)} / ${Math.round(T / 1e6)} Mo` });
+        stage('stLm', dlMsg('lm', m));
       } else if (m.type === 'ready') {
         stage('stLm', { p: 0, msg: `Modèle prêt (${m.backend.device === 'webgpu' ? 'carte graphique' : 'processeur'})` });
       } else if (m.type === 'progress') {
@@ -178,15 +250,48 @@ async function analyse() {
   $('cancel').classList.add('hidden');
 }
 
-$('cancel').addEventListener('click', () => { abort?.abort(); worker?.postMessage({ type: 'cancel' }); });
+$('cancel').addEventListener('click', () => { abort?.abort(); Object.values(workers).forEach(w => w.postMessage({ type: 'cancel' })); });
 $('go').addEventListener('click', analyse);
 
 /* ---------- Affichage ---------- */
+const sig = z => 1 / (1 + Math.exp(-z));
 function combine(res) {
-  const parts = [{ p: res.heur.score / 100, w: WEIGHTS.heuristics, k: 'heur' }];
-  if (res.lm) parts.push({ p: res.lm.prob, w: WEIGHTS.lm, k: 'lm' });
-  if (res.judge) parts.push({ p: res.judge.probabilite_ia / 100, w: WEIGHTS.judge, k: 'judge' });
-  return ensemble(parts, { strongSign: res.heur.strong, words: res.heur.n });
+  const H = res.heur;
+  const f = { heur: H.score / 100 };
+  if (res.clf) f.clf = res.clf.logit;
+  if (res.lm) f.lm = res.lm.D;
+  if (res.judge) f.juge = res.judge.probabilite_ia / 100;
+  let E = null;
+  let cal = calibratedEnsemble(CAL, f);
+  if (!cal && Number.isFinite(f.juge)) {
+    // Vérification par IA non mesurée par le banc d'essai : combinaison réglée sans elle, puis mélange simple.
+    const { juge, ...sans } = f;
+    const c2 = calibratedEnsemble(CAL, sans);
+    if (c2) cal = { ...c2, p: (1 - WEIGHTS.judge) * c2.p + WEIGHTS.judge * juge };
+  }
+  if (cal) {
+    let p = cal.p;
+    if (H.strong) p = Math.max(p, 0.85);
+    E = { p, score: Math.round(p * 100), calibrated: cal };
+  } else {
+    const parts = [{ p: f.heur, w: WEIGHTS.heuristics }];
+    if (res.clf) parts.push({ p: sig(res.clf.logit), w: WEIGHTS.clf });
+    if (res.lm) parts.push({ p: res.lm.prob, w: WEIGHTS.lm });
+    if (res.judge) parts.push({ p: f.juge, w: WEIGHTS.judge });
+    E = ensemble(parts, { strongSign: H.strong, words: H.n });
+  }
+  if (res.meld) {
+    const p = WEIGHTS.meld * res.meld.p_ai + (1 - WEIGHTS.meld) * E.p;
+    E = { ...E, p, score: Math.round(p * 100), meldFlag: res.meld.signale };
+  }
+  // Confiance : longueur du texte, accord entre méthodes, position par rapport au seuil à 1 % de faux positifs.
+  const probs = [f.heur, res.clf && sig(res.clf.logit), res.lm?.prob, res.judge && f.juge, res.meld?.p_ai].filter(x => Number.isFinite(x));
+  const spread = probs.length > 1 ? Math.max(...probs) - Math.min(...probs) : 0;
+  let confidence = 'moyenne';
+  if (H.n < 80 || spread > 0.5) confidence = 'faible';
+  else if (H.strong || ((res.clf || res.meld) && H.n >= 200 && Math.abs(E.p - 0.5) > 0.3 && spread < 0.4)) confidence = 'élevée';
+  E.confidence = confidence;
+  return E;
 }
 
 function card(title, score, body, off) {
@@ -199,7 +304,8 @@ function render(res) {
   res.final = E;
   $('pct').textContent = E.score + ' %';
   $('verdict').textContent = verdict(E.score);
-  $('conf').textContent = 'Confiance : ' + E.confidence;
+  const seuilTxt = res.heur.strong ? ' · formule d\'assistant ou artefact de chatbot trouvé' : E.calibrated ? (E.calibrated.flagged1 ? ' · au-delà du seuil à 1 % de faux positifs' : E.calibrated.flagged5 ? ' · au-delà du seuil à 5 % de faux positifs seulement' : ' · sous le seuil de détection') : '';
+  $('conf').textContent = 'Confiance : ' + E.confidence + seuilTxt;
   $('gauge').style.width = E.score + '%';
   const H = res.heur;
   const notes = [];
@@ -208,10 +314,21 @@ function render(res) {
   notes.push(`${H.n.toLocaleString('fr-FR')} mots, ${res.sentences.length.toLocaleString('fr-FR')} phrases.`);
   $('note').textContent = notes.join(' ');
 
-  const L = res.lm, J = res.judge;
+  const L = res.lm, J = res.judge, C = res.clf, M = res.meld;
+  const clfOff = !res.use.clf ? (classifierId() ? 'Désactivé' : 'Pas encore entraîné') : res.errors.clf ? 'Erreur' : !C ? 'En cours…' : null;
   const lmOff = !$('useLm').checked && !L ? 'Désactivé' : res.errors.lm ? 'Erreur' : !L ? 'En cours…' : null;
   const jOff = !$('useJudge').checked && !J ? 'Désactivée' : res.errors.judge ? 'Erreur' : !J ? 'En cours…' : null;
+  const clfP = C ? Math.round(sig(C.logit) * 100) : 0;
+  const s1 = CAL?.classifieur?.seuil_1pc;
   $('cards').innerHTML =
+    card('Détecteur entraîné', clfP, C ? `<div class="kv">
+      <div>Score brut (logit)<b>${fmt(C.logit)}</b></div>
+      ${Number.isFinite(s1) ? `<div>Seuil à 1 % de faux positifs<b>${fmt(s1)}</b></div><div>Verdict à ce seuil<b>${C.logit > s1 ? 'IA' : 'Humain'}</b></div>` : ''}
+      <div>Fenêtres analysées<b>${C.windowsAnalysed} / ${C.windowsTotal}</b></div></div>` : res.errors.clf ? `<p class="small">${esc(res.errors.clf)}</p>` : '', clfOff) +
+    (res.use.meld || M ? card('MELD (anglais)', M ? Math.round(M.p_ai * 100) : 0, M ? `<div class="kv">
+      <div>Verdict au seuil de 1 % de faux positifs<b>${M.signale ? 'IA' : 'Humain'}</b></div>
+      <div>Famille de modèle probable<b>${esc(M.famille || '—')}</b></div>
+      <div>Type d'usage probable<b>${esc(M.tache || '—')}</b></div></div>` : res.errors.meld ? `<p class="small">${esc(res.errors.meld)}</p>` : '', M ? null : res.errors.meld ? 'Erreur' : 'En cours…') : '') +
     card('Modèle de langage', L ? Math.round(L.prob * 100) : 0, L ? `<div class="kv">
       <div>Courbure (Fast-DetectGPT)<b>${fmt(L.D)}</b></div>
       <div>Perplexité<b>${fmt(L.ppl, 1)}</b></div>
@@ -242,7 +359,8 @@ function render(res) {
   };
   res.sentences.forEach((s, i) => {
     html += inner(pos, s.start);
-    const p = L?.perSentence[i];
+    const zc = C?.perSentence?.[i];
+    const p = Number.isFinite(zc) ? sig(zc) : L?.perSentence[i];
     const cls = p == null ? '' : p >= 0.8 ? ' hi' : p >= 0.62 ? ' mid' : '';
     const title = p == null ? '' : ` title="Probabilité IA de la phrase : ${Math.round(p * 100)} %"`;
     html += `<span class="s${cls}"${title}>${inner(s.start, s.end)}</span>`;
@@ -271,6 +389,8 @@ function report(res) {
     `Signes Wikipédia et style : ${H.score} %`,
     ...H.found.map(f => `  - ${f.c.name} : ${f.ex.length}`)
   ];
+  if (res.clf) lines.push('', `Détecteur entraîné : ${Math.round(sig(res.clf.logit) * 100)} % (logit ${fmt(res.clf.logit)})`);
+  if (res.meld) lines.push('', `MELD : ${Math.round(res.meld.p_ai * 100)} % (${res.meld.signale ? 'IA' : 'humain'} au seuil de 1 % de faux positifs)`);
   if (L) lines.push('', `Modèle de langage : ${Math.round(L.prob * 100)} %`, `  courbure ${fmt(L.D)}, perplexité ${fmt(L.ppl, 1)}, burstiness ${fmt(L.burstiness)}, top 10 ${pct(L.top10)}, ${L.tokens} tokens`);
   if (J) lines.push('', `Vérification par IA : ${J.probabilite_ia} % (confiance ${J.confiance})`, `  ${J.verdict}`, ...J.indices_ia.map(x => `  - IA : « ${x.extrait} » ${x.raison}`), ...J.indices_humains.map(x => `  - Humain : « ${x.extrait} » ${x.raison}`));
   return lines.join('\n');
@@ -294,7 +414,7 @@ $('dlJson').addEventListener('click', () => {
   const data = { score: final.score, verdict: verdict(final.score), confiance: final.confidence, mots: heur.n,
     signes: { score: heur.score, parCategorie: heur.found.map(f => ({ categorie: f.c.name, nombre: f.ex.length, exemples: [...new Set(f.ex)].slice(0, 10) })) },
     modeleDeLangage: lm && { probabilite: lm.prob, courbure: lm.D, perplexite: lm.ppl, burstiness: lm.burstiness, top1: lm.top1, top10: lm.top10, tokens: lm.tokens, blocs: lmMeta && `${lmMeta.chunksAnalysed}/${lmMeta.chunksTotal}` },
-    verificationIA: j };
+    verificationIA: j, detecteurEntraine: last.clf && { logit: last.clf.logit, probabilite: sig(last.clf.logit) }, meld: last.meld };
   download('rapport-detecteur-ia.json', JSON.stringify(data, null, 2), 'application/json');
 });
 
@@ -356,7 +476,25 @@ $('calGo').addEventListener('click', async () => {
   calState();
 });
 
+/* ---------- Fiabilité mesurée (banc d'essai) ---------- */
+const NOMS = { clf: 'Détecteur entraîné', lm: 'Modèle de langage (Fast-DetectGPT)', heur: 'Signes Wikipédia et style', juge: 'Vérification par IA', meld: 'MELD' };
+async function renderPerf() {
+  let B = null;
+  try { const r = await fetch('resultats/benchmark.json', { cache: 'no-cache' }); if (r.ok) B = await r.json(); } catch { /* absent */ }
+  if (!B?.methodes || !Object.keys(B.methodes).length) {
+    $('perfBody').innerHTML = `<p>Le banc d'essai n'a pas encore été lancé sur ce site : aucune mesure n'est publiée pour l'instant. Les scores affichés sont donc des estimations non vérifiées. Le dossier <code>entrainement/</code> du projet contient le notebook qui entraîne le détecteur et mesure chaque méthode.</p>`;
+    return;
+  }
+  const row = (nom, r) => `<tr><td>${esc(nom)}</td><td class="n">${fmt(r.auroc, 3)}</td><td class="barc"><div class="hbar"><i style="width:${Math.round(r.tpr_a_1pc_fpr * 100)}%"></i></div></td><td class="n">${(Math.round(r.tpr_a_1pc_fpr * 1000) / 10).toLocaleString('fr-FR')} %</td><td class="n">${Number.isFinite(r.faux_positifs) ? (Math.round(r.faux_positifs * 1000) / 10).toLocaleString('fr-FR') + ' %' : '—'}</td></tr>`;
+  const meth = Object.entries(B.methodes || {}).map(([k, r]) => row(NOMS[k] || k, r)).join('');
+  const best = Object.entries(B.combinaisons || {}).sort((a, b) => b[1].tpr_a_1pc_fpr - a[1].tpr_a_1pc_fpr)[0];
+  const combo = best ? row('Combinaison : ' + best[0].split('+').map(k => NOMS[k] || k).join(' + '), best[1]) : '';
+  $('perfBody').innerHTML = `<div class="scroll"><table><thead><tr><th>Méthode</th><th class="n">AUROC</th><th colspan="2">IA repérée à 1 % de faux positifs</th><th class="n">Faux positifs au seuil</th></tr></thead><tbody>${meth}${combo}</tbody></table></div>
+    <p class="small">Mesuré le ${esc(B.date)} sur ${B.donnees.test} textes de test en français (${esc(B.donnees.domaines.join(', '))}), générés par ${esc(B.donnees.generateurs.join(', '))}. Ces chiffres valent pour des textes semblables : ils seront moins bons sur des genres ou des IA absents du test.</p>`;
+}
+
 /* ---------- Démarrage ---------- */
+loadCalibration();
 const draft = store.get('detia-draft');
 if (draft) txt.value = draft;
 updCount();

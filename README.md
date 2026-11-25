@@ -7,17 +7,26 @@ Détecteur de textes générés par intelligence artificielle : gratuit, sans li
 ## Ce qu'il fait
 
 - Analyse un texte collé ou un document importé : PDF (texte), Word `.docx`, OpenDocument `.odt`, `.rtf`, `.txt`, `.md`, `.html`.
-- Combine trois méthodes, comme les détecteurs commerciaux :
+- Combine cinq méthodes. La combinaison et les seuils sont réglés par un banc d'essai sur des textes de test :
 
-| Méthode | Principe | Poids |
-|---|---|---|
-| **Modèle de langage local** | Qwen2.5-0.5B-Instruct (multilingue) tourne dans le navigateur avec [Transformers.js](https://github.com/huggingface/transformers.js). Calcule la perplexité (comme le GPTZero d'origine), la burstiness, la part de mots du top 10 (GLTR) et surtout la **courbure de probabilité conditionnelle** de [Fast-DetectGPT](https://arxiv.org/abs/2310.05130) (ICLR 2024). | 50 % |
-| **Vérification par IA** | Un grand modèle (Claude, GPT ou Mistral) relit le texte avec les critères Wikipédia, rend une probabilité et cite ses indices. | 30 % |
-| **Signes Wikipédia et style** | Repère les signes du guide [« Signs of AI writing »](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing) du WikiProject AI Cleanup, adaptés au français : vocabulaire typique, parallélisme négatif, triplets, remarques éditoriales, conclusions, formules d'assistant, artefacts, mise en forme. Mesure aussi la régularité des phrases. | 20 % |
+| Méthode | Principe |
+|---|---|
+| **Détecteur entraîné** | Encodeur multilingue mmBERT-small entraîné sur des textes humains français antérieurs à 2023 et leurs miroirs générés par plusieurs IA, puis réentraîné sur ses erreurs (méthode Pangram). Tourne dans le navigateur. Voir [`entrainement/`](entrainement/README.md). |
+| **MELD** (anglais) | [Détecteur open source](https://arxiv.org/abs/2605.06903), premier des modèles ouverts sur le banc d'essai RAID. Trop lourd pour le navigateur : il tourne sur un serveur gratuit (voir [`serveur-meld/`](serveur-meld/README.md)). |
+| **Modèle de langage local** | Qwen2.5-0.5B-Instruct (multilingue) tourne dans le navigateur avec [Transformers.js](https://github.com/huggingface/transformers.js). Calcule la perplexité (comme le GPTZero d'origine), la burstiness, la part de mots du top 10 (GLTR) et surtout la **courbure de probabilité conditionnelle** de [Fast-DetectGPT](https://arxiv.org/abs/2310.05130) (ICLR 2024). |
+| **Vérification par IA** | Un grand modèle (Claude, GPT ou Mistral) relit le texte avec les critères Wikipédia, rend une probabilité et cite ses indices. |
+| **Signes Wikipédia et style** | Repère les signes du guide [« Signs of AI writing »](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing) du WikiProject AI Cleanup, adaptés au français : vocabulaire typique, parallélisme négatif, triplets, remarques éditoriales, conclusions, formules d'assistant, artefacts, mise en forme. Mesure aussi la régularité des phrases. |
 
 - Surligne chaque phrase selon sa probabilité d'avoir été générée et souligne chaque signe repéré.
 - Exporte le rapport en texte ou en JSON.
 - Propose une **calibration** : collez des textes dont vous connaissez l'origine, le seuil s'ajuste à vos données.
+
+## Fiabilité mesurée
+
+Le notebook [`entrainement/entrainement.ipynb`](entrainement/entrainement.ipynb) (Colab ou Kaggle, GPU gratuit) entraîne le détecteur,
+puis mesure chaque méthode sur des textes de test jamais vus : AUROC, et part de textes d'IA repérés quand on n'accepte
+que 1 % de faux positifs. Les résultats (`resultats/benchmark.json`) sont affichés sur le site, et les réglages
+(`js/calibration.json`) sont appliqués automatiquement. Tant que le banc d'essai n'a pas tourné, le site l'indique.
 
 ## Confidentialité
 
@@ -46,13 +55,18 @@ Le site est statique : **ne mettez jamais de clé API dans le code**, elle serai
 index.html          page
 css/style.css       styles
 js/app.js           interface et orchestration
+js/classifier-worker.js  détecteur entraîné (Web Worker)
 js/lm-worker.js     modèle de langage (Web Worker)
 js/scoring.js       calcul des scores, combinaison, calibration
 js/heuristics.js    signes Wikipédia et statistiques de style
 js/llm-judge.js     vérification par IA (Anthropic, OpenAI, Mistral, relais)
 js/prompt.js        consigne du vérificateur
 js/docs.js          extraction de texte des documents
-js/config.js        réglages (relais, poids, calibration)
+js/config.js        réglages (relais, MELD, modèle entraîné)
+js/calibration.json réglages produits par le banc d'essai
+resultats/          résultats du banc d'essai
+entrainement/       données, génération, entraînement, export, banc d'essai, notebook Colab
+serveur-meld/       serveur MELD (Hugging Face Space)
 relais/             relais Cloudflare Worker optionnel
 ```
 

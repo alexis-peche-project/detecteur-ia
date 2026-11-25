@@ -38,6 +38,28 @@ export function ensemble(parts, { strongSign = false, words = 0 } = {}) {
   return { p, score: Math.round(p * 100), confidence };
 }
 
+// Combinaison réglée par le banc d'essai (régression logistique sur la partie « val »).
+// features : { clf: logit, lm: D, heur: 0..1, juge: 0..1 }. Renvoie null si aucun réglage ne correspond.
+export function calibratedEnsemble(calibration, features) {
+  const avail = Object.keys(features).filter(k => Number.isFinite(features[k])).sort();
+  const ens = calibration?.ensembles?.[avail.join('+')];
+  if (!ens) return null;
+  const z = ens.features.reduce((a, f, i) => a + ens.coef[i] * features[f], ens.intercept);
+  const p = sigmoid(z);
+  return { p, key: avail.join('+'), seuil1: ens.seuil_1pc, seuil5: ens.seuil_5pc, flagged1: p > ens.seuil_1pc, flagged5: p > ens.seuil_5pc, tpr1: ens.tpr_1pc_test, auroc: ens.auroc_test };
+}
+
+// Détection simple de la langue (français, anglais ou autre) par mots outils.
+export function detectLang(text) {
+  const w = (text.toLowerCase().match(/[\p{L}']+/gu) || []).slice(0, 3000);
+  const FR = new Set(['le', 'la', 'les', 'des', 'est', 'et', 'une', 'du', 'que', 'pour', 'dans', 'pas', 'qui', 'sur', 'au', 'avec', 'ce', 'il', 'elle', 'nous', 'vous', 'mais', 'ou', 'son', 'sa', 'ses', 'aux', 'par', 'plus', 'cette']);
+  const EN = new Set(['the', 'and', 'is', 'of', 'to', 'that', 'in', 'it', 'for', 'with', 'as', 'was', 'are', 'this', 'be', 'by', 'not', 'or', 'have', 'from', 'at', 'which', 'an', 'they', 'you', 'we', 'but', 'his', 'her']);
+  let fr = 0, en = 0;
+  for (const x of w) { if (FR.has(x)) fr++; if (EN.has(x)) en++; }
+  if (fr + en < 5) return 'autre';
+  return fr >= en ? 'fr' : 'en';
+}
+
 export const verdict = s => s < 20 ? 'Très probablement écrit par un humain'
   : s < 40 ? 'Probablement écrit par un humain'
   : s < 60 ? 'Mixte ou incertain'
