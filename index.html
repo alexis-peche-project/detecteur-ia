@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Détecteur de texte IA</title>
+<meta name="description" content="Détecteur de texte généré par IA, gratuit, sans limite de mots et open source. Analyse par modèle de langage dans le navigateur, vérification par IA et signes du guide Wikipédia.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23111214'/%3E%3Ccircle cx='14' cy='14' r='7' fill='none' stroke='%23b8f5d0' stroke-width='3'/%3E%3Cpath d='M19 19l6 6' stroke='%23b8f5d0' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<section class="band"><div class="wrap">
+  <h1>Ce texte a-t-il été écrit par une IA&nbsp;?</h1>
+  <p class="lead">Gratuit, sans limite de mots et open source. Collez un texte ou importez un document : un modèle de langage l'analyse directement dans votre navigateur, une IA peut le relire, et les signes recensés par Wikipédia sont repérés un par un.</p>
+
+  <div class="drop" id="drop">
+    <label for="txt" class="sr">Texte à analyser</label>
+    <textarea id="txt" placeholder="Collez votre texte ici, ou déposez un document (PDF, Word, ODT, TXT…)"></textarea>
+    <div class="dropHint" aria-hidden="true">Déposez le document ici</div>
+  </div>
+  <div class="bar">
+    <button class="main" id="go">Analyser le texte</button>
+    <label class="btn" for="file">Importer un document</label>
+    <input type="file" id="file" class="sr">
+    <button id="exAi">Exemple style IA</button>
+    <button id="exHu">Exemple style humain</button>
+    <button id="clear">Effacer</button>
+    <span class="count" id="count">0 mot</span>
+  </div>
+  <p class="fileInfo" id="fileInfo" role="status"></p>
+
+  <fieldset class="opts">
+    <legend class="sr">Méthodes d'analyse</legend>
+    <label class="opt"><input type="checkbox" id="useLm" checked>
+      <span><b>Modèle de langage local</b><small>Perplexité et courbure de probabilité (méthode Fast-DetectGPT), calculées dans votre navigateur. Environ 500 Mo téléchargés une seule fois, puis gardés en cache.</small></span></label>
+    <label class="opt"><input type="checkbox" id="useJudge">
+      <span><b>Vérification par IA</b><small>Une IA (Claude, GPT ou Mistral) relit le texte avec les critères Wikipédia et cite ses indices. Nécessite une clé API ou le relais du site.</small></span></label>
+    <label class="opt sel"><span><b>Étendue de l'analyse</b><small>Les longs documents sont échantillonnés de façon régulière, ou analysés en entier.</small></span>
+      <select id="scope"><option value="sample">Échantillon rapide</option><option value="full">Document complet</option></select></label>
+  </fieldset>
+
+  <details class="api" id="apiBox">
+    <summary>Réglages de la vérification par IA</summary>
+    <div class="apiGrid">
+      <label>Fournisseur<select id="provider"></select></label>
+      <label>Modèle<input id="model" autocomplete="off" spellcheck="false"></label>
+      <label class="wide" id="keyRow">Clé API<input id="apiKey" type="password" autocomplete="off" spellcheck="false"></label>
+      <label class="chk wide" id="rememberRow"><input type="checkbox" id="remember"> Mémoriser la clé sur cet appareil</label>
+    </div>
+    <p class="small">La clé est envoyée uniquement au fournisseur choisi, directement depuis votre navigateur. Elle n'est jamais envoyée au site. Sans « Mémoriser », elle est effacée à la fermeture de l'onglet. Chaque analyse coûte quelques centimes sur votre compte du fournisseur.</p>
+  </details>
+
+  <div id="status" class="status hidden" role="status" aria-live="polite">
+    <div class="stage" id="stHeur"><span>Signes et style</span><div class="pbar"><i></i></div><em></em></div>
+    <div class="stage" id="stLm"><span>Modèle de langage</span><div class="pbar"><i></i></div><em></em></div>
+    <div class="stage" id="stJudge"><span>Vérification par IA</span><div class="pbar"><i></i></div><em></em></div>
+    <button id="cancel">Annuler</button>
+  </div>
+
+  <div id="out" class="hidden">
+    <div class="res">
+      <div class="score">
+        <div>
+          <div class="big" id="pct">0 %</div>
+          <div class="verdict" id="verdict">—</div>
+          <div class="conf" id="conf"></div>
+        </div>
+        <div>
+          <div class="gauge"><i id="gauge"></i></div>
+          <div class="scale"><span>Humain</span><span>Incertain</span><span>IA</span></div>
+        </div>
+        <div class="note" id="note"></div>
+      </div>
+      <div class="cards" id="cards"></div>
+    </div>
+    <div class="two">
+      <div>
+        <h2>Texte annoté</h2>
+        <div class="legend"><span><i class="lg hi"></i>Phrase très probablement IA</span><span><i class="lg mid"></i>Phrase suspecte</span><span><i class="lg mk"></i>Signe Wikipédia</span><span><i class="lg st"></i>Signe très fort</span></div>
+        <div class="annot" id="annot"></div>
+      </div>
+      <div>
+        <div id="judgeBox"></div>
+        <h2>Signes repérés</h2>
+        <ul class="signs" id="signs"></ul>
+        <div class="bar">
+          <button id="copy">Copier le rapport</button>
+          <button id="dlTxt">Télécharger (.txt)</button>
+          <button id="dlJson">Télécharger (.json)</button>
+        </div>
+        <p class="small" id="copied" role="status"></p>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<section class="band method"><div class="wrap">
+  <h2>Comment fonctionne l'analyse</h2>
+  <div class="grid3">
+    <div><h3>1. Modèle de langage</h3><p>Le texte est lu par Qwen2.5-0.5B, un petit modèle de langage multilingue qui tourne dans votre navigateur. Pour chaque mot, on calcule la probabilité que le modèle l'aurait choisi. Un texte d'IA choisit presque toujours les mots les plus attendus : sa perplexité est basse. La courbure de probabilité (Fast-DetectGPT, ICLR 2024) compare chaque choix aux alternatives possibles ; c'est la mesure la plus fiable des trois. La burstiness mesure la variation de cette perplexité entre les phrases.</p></div>
+    <div><h3>2. Vérification par IA</h3><p>Comme les grands détecteurs commerciaux, le site peut faire relire le texte par un grand modèle (Claude, GPT ou Mistral). Il reçoit les critères du guide Wikipédia, rend une probabilité et cite les passages qui l'ont convaincu. Les longs documents sont envoyés en plusieurs morceaux répartis dans le texte.</p></div>
+    <div><h3>3. Signes Wikipédia et style</h3><p>Le WikiProject AI Cleanup recense les tics des chatbots : vocabulaire gonflé, parallélisme négatif, triplets, remarques éditoriales, conclusions répétées, formules d'assistant, tirets et gras en excès. On mesure aussi la régularité des phrases et des paragraphes.</p></div>
+  </div>
+  <p class="weights">Score final : moyenne pondérée des méthodes actives (modèle de langage 50 %, vérification par IA 30 %, signes et style 20 %). Une formule d'assistant oubliée ou un artefact de chatbot porte le score à 85 % minimum.</p>
+
+  <details class="calib" id="calib">
+    <summary>Calibration (pour aller plus loin)</summary>
+    <p>Le seuil du modèle de langage est réglé par défaut d'après la littérature. Pour l'ajuster à vos textes, collez quelques textes dont vous connaissez l'origine, séparés par une ligne contenant seulement <code>---</code>. Trois textes de chaque type, de 150 mots ou plus, suffisent pour commencer. Le réglage est gardé sur cet appareil.</p>
+    <div class="calGrid">
+      <label>Textes écrits par des humains<textarea id="calHu"></textarea></label>
+      <label>Textes générés par une IA<textarea id="calAi"></textarea></label>
+    </div>
+    <div class="bar"><button class="main" id="calGo">Calibrer</button><button id="calReset">Revenir au réglage par défaut</button><span class="count" id="calState"></span></div>
+    <div id="calOut"></div>
+  </details>
+
+  <div class="caveat"><strong>À lire avant de conclure.</strong> Aucun détecteur n'est une preuve, y compris les services payants. Les meilleurs outils se trompent encore, surtout sur les textes courts, les textes d'IA retravaillés par un humain, et les textes humains très formels ou écrits par des non-natifs. Wikipédia le rappelle : aucun signe isolé ne suffit, c'est l'accumulation qui compte. Ne fondez jamais une sanction sur ce seul résultat.</div>
+</div></section>
+
+<footer class="band"><div class="wrap">
+  Votre texte est analysé dans votre navigateur : il n'est envoyé nulle part, sauf au fournisseur d'IA que vous choisissez pour la vérification. Méthode : guide « Signs of AI writing » de Wikipédia, GPTZero (perplexité et burstiness), Fast-DetectGPT (Bao et al., ICLR 2024). Code source sur <a href="https://github.com/alexis-peche-project/detecteur-ia">GitHub</a>, licence MIT.
+</div></footer>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

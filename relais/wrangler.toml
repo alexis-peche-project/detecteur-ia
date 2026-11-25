@@ -1,0 +1,17 @@
+name = "detecteur-ia-relais"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+ALLOWED_ORIGIN = "https://alexis-peche-project.github.io"
+MODEL = "claude-haiku-5-5"
+MAX_CHARS = "20000"
+
+# Limite : 10 analyses par minute et par adresse IP.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }
+
+# La clé ne s'écrit jamais ici. Ajoutez-la comme secret :
+#   npx wrangler secret put ANTHROPIC_API_KEY
