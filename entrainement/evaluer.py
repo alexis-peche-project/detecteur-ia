@@ -54,7 +54,7 @@ def det_lm(docs, modele="Qwen/Qwen2.5-0.5B-Instruct", fen=192, max_fen=12):
     from transformers import AutoModelForCausalLM, AutoTokenizer
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tok = AutoTokenizer.from_pretrained(modele)
-    model = AutoModelForCausalLM.from_pretrained(modele, torch_dtype=torch.float16 if device == "cuda" else torch.float32).to(device).eval()
+    model = AutoModelForCausalLM.from_pretrained(modele, dtype=torch.float16 if device == "cuda" else torch.float32).to(device).eval()
     out = []
     for d in docs:
         ids = tok(d["text"], add_special_tokens=False)["input_ids"]
