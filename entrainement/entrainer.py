@@ -25,7 +25,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from commun import DATA, fenetres, lire_jsonl, normaliser, scorer_docs
+from commun import DATA, avec_speciaux, fenetres, lire_jsonl, normaliser, scorer_docs
 from metriques import resume, seuil_pour_fpr
 
 ICI = Path(__file__).resolve().parent
@@ -46,7 +46,7 @@ def exemples(docs, tok, longueur, max_fen, rng, poids_difficiles=None):
         rep = (poids_difficiles or {}).get(d.get("pair_id") or d["id"], 1)
         for w in fen:
             for _ in range(rep):
-                out.append((tok.build_inputs_with_special_tokens(w), d["label"]))
+                out.append((avec_speciaux(tok, w), d["label"]))
     rng.shuffle(out)
     return out
 

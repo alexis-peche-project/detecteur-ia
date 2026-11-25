@@ -67,6 +67,31 @@ def fenetres(ids, longueur, max_fen=None):
     return out or [ids]
 
 
+_SPECIAUX = {}
+
+
+def avec_speciaux(tokenizer, ids):
+    """Ajoute les tokens spéciaux ([CLS] … [SEP], <s> … </s>…) à une fenêtre de tokens.
+    Fonctionne avec toutes les versions de transformers (la méthode build_inputs_with_special_tokens
+    n'existe plus pour certains tokenizers en version 5)."""
+    cle = id(tokenizer)
+    if cle not in _SPECIAUX:
+        f = getattr(tokenizer, "build_inputs_with_special_tokens", None)
+        try:
+            if f:
+                f([1])
+                _SPECIAUX[cle] = f
+        except Exception:
+            pass
+        if cle not in _SPECIAUX:
+            nu = tokenizer("x", add_special_tokens=False)["input_ids"]
+            plein = tokenizer("x", add_special_tokens=True)["input_ids"]
+            i = next((k for k in range(len(plein)) if plein[k:k + len(nu)] == nu), 0)
+            pre, suf = plein[:i], plein[i + len(nu):]
+            _SPECIAUX[cle] = lambda w, pre=pre, suf=suf: list(pre) + list(w) + list(suf)
+    return _SPECIAUX[cle](ids)
+
+
 def sigmoide(x):
     return 1 / (1 + math.exp(-x))
 
@@ -81,7 +106,7 @@ def scorer_docs(model, tokenizer, textes, longueur=512, max_fen=16, batch=16, de
         fen = fenetres(ids, longueur - 2, max_fen)
         logits = []
         for i in range(0, len(fen), batch):
-            lot = [tokenizer.build_inputs_with_special_tokens(w) for w in fen[i:i + batch]]
+            lot = [avec_speciaux(tokenizer, w) for w in fen[i:i + batch]]
             m = max(len(x) for x in lot)
             pad = tokenizer.pad_token_id or 0
             inp = torch.tensor([x + [pad] * (m - len(x)) for x in lot], device=device)
