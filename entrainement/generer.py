@@ -81,35 +81,48 @@ def choisir_tache(rng):
 
 
 # ---------- Backends ----------
+# Chaque backend traite les travaux par lots de TAILLE_LOT et appelle `sauver(lot, textes)` après chaque lot :
+# si la session s'arrête, seuls les textes du lot en cours sont perdus.
 
-def backend_factice(jobs, **_):
+TAILLE_LOT = 150
+
+
+def lots(jobs, n=TAILLE_LOT):
+    for i in range(0, len(jobs), n):
+        yield jobs[i:i + n]
+
+
+def backend_factice(jobs, sauver, **_):
     rng = random.Random(0)
     phrases = ["Il est important de noter que ce sujet joue un rôle clé.",
                "Cette évolution souligne l'importance cruciale de la question.",
                "En outre, plusieurs facteurs contribuent à cette dynamique.",
                "En conclusion, il s'agit d'un enjeu essentiel pour l'avenir."]
-    return [" ".join(rng.choice(phrases) for _ in range(12)) for _ in jobs]
+    for lot in lots(jobs):
+        sauver(lot, [" ".join(rng.choice(phrases) for _ in range(12)) for _ in lot])
 
 
-def backend_vllm(jobs, modele, max_tokens=1400, **_):
+def backend_vllm(jobs, sauver, modele, max_tokens=1400, **_):
     import torch
     from vllm import LLM, SamplingParams
     cap = torch.cuda.get_device_capability()[0] if torch.cuda.is_available() else 0
     llm = LLM(model=modele, dtype="half" if cap < 8 else "auto", max_model_len=4096,
               gpu_memory_utilization=0.90, trust_remote_code=True, enforce_eager=cap < 8)
-    convs = [[{"role": "user", "content": j["prompt"]}] for j in jobs]
-    params = [SamplingParams(temperature=j["temperature"], top_p=0.95, max_tokens=max_tokens, seed=j["seed"]) for j in jobs]
-    outs = llm.chat(convs, params, use_tqdm=True)
-    textes = [o.outputs[0].text for o in outs]
-    del llm
-    gc.collect()
     try:
-        torch.cuda.empty_cache()
-        from vllm.distributed.parallel_state import destroy_model_parallel
-        destroy_model_parallel()
-    except Exception:
-        pass
-    return textes
+        for lot in lots(jobs):
+            convs = [[{"role": "user", "content": j["prompt"]}] for j in lot]
+            params = [SamplingParams(temperature=j["temperature"], top_p=0.95, max_tokens=max_tokens, seed=j["seed"]) for j in lot]
+            outs = llm.chat(convs, params, use_tqdm=False)
+            sauver(lot, [o.outputs[0].text for o in outs])
+    finally:
+        del llm
+        gc.collect()
+        try:
+            torch.cuda.empty_cache()
+            from vllm.distributed.parallel_state import destroy_model_parallel
+            destroy_model_parallel()
+        except Exception:
+            pass
 
 
 def _api_call(fournisseur, modele, j, max_tokens=1600):
@@ -140,18 +153,19 @@ def _api_call(fournisseur, modele, j, max_tokens=1600):
     return ""
 
 
-def backend_api(jobs, fournisseur, modele, workers=6, **_):
+def backend_api(jobs, sauver, fournisseur, modele, workers=6, **_):
     with ThreadPoolExecutor(workers) as ex:
-        return list(ex.map(lambda j: _api_call(fournisseur, modele, j), jobs))
+        for lot in lots(jobs):
+            sauver(lot, list(ex.map(lambda j: _api_call(fournisseur, modele, j), lot)))
 
 
-def generer(jobs, gen):
+def generer(jobs, gen, sauver):
     if gen == "factice":
-        return backend_factice(jobs)
+        return backend_factice(jobs, sauver)
     kind, _, modele = gen.partition(":")
     if kind == "vllm":
-        return backend_vllm(jobs, modele)
-    return backend_api(jobs, kind, modele)
+        return backend_vllm(jobs, sauver, modele)
+    return backend_api(jobs, sauver, kind, modele)
 
 
 # ---------- Programme ----------
@@ -184,38 +198,47 @@ def main():
     par_gen = {g: [] for g in gens}
     k = 0
     for h in humains:
-        for _ in range(a.par_humain):
+        for m in range(a.par_humain):
             g = gens[k % len(gens)]
             k += 1
+            # Tous les tirages au sort sont faits avant de sauter les textes existants :
+            # une reprise retombe exactement sur les mêmes travaux.
             tache = choisir_tache(rng)
-            jid = f"a-{hashlib.sha1((g + tache + h['id']).encode()).hexdigest()[:12]}"
+            temperature, seed = round(rng.uniform(0.6, 1.0), 2), rng.randint(0, 10**6)
+            hid = h["id"]
+            jid = f"a-{hashlib.sha1(f'{hid}|{m}|{a.seed}'.encode()).hexdigest()[:12]}"
             if jid in deja:
                 continue
             par_gen[g].append({"id": jid, "h": h, "tache": tache, "prompt": prompt(h, tache),
-                               "temperature": round(rng.uniform(0.6, 1.0), 2), "seed": rng.randint(0, 10**6)})
+                               "temperature": temperature, "seed": seed})
 
     total = 0
     for g, jobs in par_gen.items():
         if not jobs:
             continue
-        print(f"→ {g} : {len(jobs)} textes", file=sys.stderr)
+        print(f"→ {g} : {len(jobs)} textes à créer", file=sys.stderr, flush=True)
+        compte = {"gardes": 0, "faits": 0}
+
+        def sauver(lot, textes, g=g, n=len(jobs), compte=compte):
+            rows = []
+            for j, t in zip(lot, textes):
+                t = nettoyer_sortie(t or "")
+                if nb_mots(t) < 40:
+                    continue
+                h = j["h"]
+                rows.append({"id": j["id"], "text": t, "label": 1, "lang": h.get("lang", "fr"), "split": h["split"],
+                             "source": h["source"], "domain": h["domain"], "pair_id": h["id"],
+                             "generator": g.split(":", 1)[-1], "task": j["tache"]})
+            ecrire_jsonl(a.sortie, rows, mode="a")
+            compte["gardes"] += len(rows)
+            compte["faits"] += len(lot)
+            print(f"   {g} : {compte['faits']}/{n} ({compte['gardes']} gardés, sauvegardés)", file=sys.stderr, flush=True)
+
         try:
-            textes = generer(jobs, g)
+            generer(jobs, g, sauver)
         except Exception as e:
-            print(f"   générateur ignoré ({e})", file=sys.stderr)
-            continue
-        rows = []
-        for j, t in zip(jobs, textes):
-            t = nettoyer_sortie(t or "")
-            if nb_mots(t) < 40:
-                continue
-            h = j["h"]
-            rows.append({"id": j["id"], "text": t, "label": 1, "lang": h.get("lang", "fr"), "split": h["split"],
-                         "source": h["source"], "domain": h["domain"], "pair_id": h["id"],
-                         "generator": g.split(":", 1)[-1], "task": j["tache"]})
-        ecrire_jsonl(a.sortie, rows, mode="a")
-        total += len(rows)
-        print(f"   {len(rows)} textes gardés", file=sys.stderr)
+            print(f"   générateur ignoré ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
+        total += compte["gardes"]
     print(f"{total} textes d'IA ajoutés → {a.sortie}")
 
 

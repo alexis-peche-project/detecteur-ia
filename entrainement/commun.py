@@ -7,6 +7,8 @@ import re
 from pathlib import Path
 
 DATA = Path(os.environ.get("DETIA_DATA", Path(__file__).resolve().parent / "donnees"))
+# Dossier des modèles entraînés (sur Google Drive dans le notebook, pour survivre aux coupures).
+MODELES = Path(os.environ.get("DETIA_MODELES", Path(__file__).resolve().parent / "modeles"))
 
 
 def lire_jsonl(path):

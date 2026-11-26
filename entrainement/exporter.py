@@ -120,8 +120,10 @@ Voir `metriques.json` et le banc d'essai du site pour le détail.
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", default=str(ICI / "modeles" / "classifieur"))
-    ap.add_argument("--sortie", default=str(ICI / "modeles" / "classifieur-onnx"))
+    import os
+    modeles = Path(os.environ.get("DETIA_MODELES", ICI / "modeles"))
+    ap.add_argument("--source", default=str(modeles / "classifieur"))
+    ap.add_argument("--sortie", default=str(modeles / "classifieur-onnx"))
     ap.add_argument("--depot", help="dépôt Hugging Face de destination (ex. votre-nom/detecteur-ia-fr)")
     a = ap.parse_args()
     dst, model, tok = exporter(a.source, a.sortie)

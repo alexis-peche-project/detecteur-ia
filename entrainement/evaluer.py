@@ -29,7 +29,7 @@ from pathlib import Path
 
 import numpy as np
 
-from commun import DATA, lire_jsonl, scorer_docs
+from commun import DATA, MODELES, lire_jsonl, scorer_docs
 from metriques import resume, seuil_pour_fpr, tpr_a_fpr
 
 ICI = Path(__file__).resolve().parent
@@ -151,7 +151,7 @@ def detail(y, s, docs, seuil):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--classifieur", help="dossier ou id Hugging Face du classifieur entraîné")
+    ap.add_argument("--classifieur", nargs="?", const=str(MODELES / "classifieur"), help="dossier ou id Hugging Face du classifieur entraîné (sans valeur : le modèle entraîné par entrainer.py)")
     ap.add_argument("--classifieur-id", help="id Hugging Face publié, écrit dans calibration.json pour le site")
     ap.add_argument("--lm", action="store_true", help="mesurer le modèle de langage local (Fast-DetectGPT)")
     ap.add_argument("--lm-modele", default="Qwen/Qwen2.5-0.5B-Instruct")

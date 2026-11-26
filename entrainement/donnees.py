@@ -13,7 +13,7 @@ import random
 import re
 import sys
 
-from commun import DATA, ecrire_jsonl, nb_mots, split_de
+from commun import DATA, ecrire_jsonl, lire_jsonl, nb_mots, split_de
 
 # Sources publiques (Hugging Face, format Parquet). On ne garde que des textes antérieurs à fin 2022
 # quand la date est connue, pour éviter les textes d'IA déjà présents sur le web.
@@ -112,7 +112,12 @@ def main():
     ap.add_argument("--pool", type=float, default=0.25,
                     help="part des textes d'entraînement gardés en réserve pour la recherche d'exemples difficiles")
     ap.add_argument("--seed", type=int, default=13)
+    ap.add_argument("--force", action="store_true", help="refaire la collecte même si elle existe déjà")
     a = ap.parse_args()
+    deja = lire_jsonl(DATA / "humains.jsonl")
+    if deja and not a.force:
+        print(f"Déjà fait : {len(deja)} textes humains dans {DATA / 'humains.jsonl'} (--force pour refaire).")
+        return
     rng = random.Random(a.seed)
 
     docs = []

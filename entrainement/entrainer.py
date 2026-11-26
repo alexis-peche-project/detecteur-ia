@@ -25,7 +25,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from commun import DATA, avec_speciaux, fenetres, lire_jsonl, normaliser, scorer_docs
+from commun import DATA, MODELES, avec_speciaux, fenetres, lire_jsonl, normaliser, scorer_docs
 from metriques import resume, seuil_pour_fpr
 
 ICI = Path(__file__).resolve().parent
@@ -113,7 +113,7 @@ def entrainer_epoques(model, tok, train, val, a, device, epoques, lr, rng, poids
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="jhu-clsp/mmBERT-small", help="encodeur de départ")
-    ap.add_argument("--sortie", default=str(ICI / "modeles" / "classifieur"))
+    ap.add_argument("--sortie", default=str(MODELES / "classifieur"))
     ap.add_argument("--longueur", type=int, default=512)
     ap.add_argument("--max-fen", type=int, default=4, help="fenêtres max par document à l'entraînement")
     ap.add_argument("--max-fen-eval", type=int, default=8)
@@ -126,7 +126,11 @@ def main():
     ap.add_argument("--generateurs", default=None, help="générateurs pour les miroirs des exemples difficiles")
     ap.add_argument("--exclure-generateur", default="", help="générateur(s) gardé(s) hors entraînement pour tester la généralisation")
     ap.add_argument("--seed", type=int, default=13)
+    ap.add_argument("--force", action="store_true", help="réentraîner même si un modèle terminé existe déjà")
     a = ap.parse_args()
+    if (Path(a.sortie) / "metriques.json").exists() and not a.force:
+        print(f"Déjà fait : modèle entraîné dans {a.sortie} (--force pour réentraîner).")
+        return
     rng = random.Random(a.seed)
     torch.manual_seed(a.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
