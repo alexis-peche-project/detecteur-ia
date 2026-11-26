@@ -171,8 +171,10 @@ def _api_call(fournisseur, modele, j, max_tokens=1600):
             return r.json()["choices"][0]["message"]["content"]
         except requests.HTTPError as e:
             code = e.response.status_code if e.response is not None else 0
-            if code in (401, 403):
-                raise CleRefusee(f"{fournisseur} refuse la clé API (erreur {code}). Vérifiez le secret.") from e
+            detail = (e.response.text[:300] if e.response is not None else "")
+            if code in (400, 401, 402, 403, 404):
+                # Erreur définitive (clé, crédit, modèle inconnu…) : inutile de réessayer.
+                raise CleRefusee(f"{fournisseur} refuse la demande (erreur {code}) : {detail}") from e
             attente = 2 ** essai * 3
             print(f"   {fournisseur} : {e} ; nouvel essai dans {attente} s", file=sys.stderr)
             time.sleep(attente)
