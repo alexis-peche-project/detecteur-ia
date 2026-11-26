@@ -125,6 +125,10 @@ def backend_vllm(jobs, sauver, modele, max_tokens=1400, **_):
             pass
 
 
+class CleRefusee(Exception):
+    """Clé API invalide ou sans droits : inutile de réessayer."""
+
+
 def _api_call(fournisseur, modele, j, max_tokens=1600):
     import requests
     for essai in range(5):
@@ -146,6 +150,13 @@ def _api_call(fournisseur, modele, j, max_tokens=1600):
             r = requests.post(url, timeout=180, headers={"authorization": f"Bearer {cle}"}, json=body)
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
+        except requests.HTTPError as e:
+            code = e.response.status_code if e.response is not None else 0
+            if code in (401, 403):
+                raise CleRefusee(f"{fournisseur} refuse la clé API (erreur {code}). Vérifiez le secret.") from e
+            attente = 2 ** essai * 3
+            print(f"   {fournisseur} : {e} ; nouvel essai dans {attente} s", file=sys.stderr)
+            time.sleep(attente)
         except Exception as e:
             attente = 2 ** essai * 3
             print(f"   {fournisseur} : {e} ; nouvel essai dans {attente} s", file=sys.stderr)
@@ -154,6 +165,8 @@ def _api_call(fournisseur, modele, j, max_tokens=1600):
 
 
 def backend_api(jobs, sauver, fournisseur, modele, workers=6, **_):
+    # Un premier appel seul vérifie la clé avant de lancer tous les travaux.
+    _api_call(fournisseur, modele, {**jobs[0], "prompt": "Réponds seulement : ok", "temperature": 0}, max_tokens=5)
     with ThreadPoolExecutor(workers) as ex:
         for lot in lots(jobs):
             sauver(lot, list(ex.map(lambda j: _api_call(fournisseur, modele, j), lot)))
