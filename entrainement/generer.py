@@ -108,12 +108,31 @@ def backend_vllm(jobs, sauver, modele, max_tokens=1400, **_):
     cap = torch.cuda.get_device_capability()[0] if torch.cuda.is_available() else 0
     llm = LLM(model=modele, dtype="half" if cap < 8 else "auto", max_model_len=4096,
               gpu_memory_utilization=0.90, trust_remote_code=True, enforce_eager=cap < 8)
+    tok = llm.get_tokenizer()
+    contexte = 4096
+
+    def ajuster(j):
+        """Raccourcit une consigne trop longue (réécriture d'un long texte) pour tenir dans le contexte du modèle."""
+        p = j["prompt"]
+        n = len(tok.encode(p))
+        while n > contexte - 600 and len(p) > 500:
+            p = p[: int(len(p) * (contexte - 700) / n)]
+            n = len(tok.encode(p))
+        return p, max(200, min(max_tokens, contexte - n - 64))
+
     try:
         for lot in lots(jobs):
-            convs = [[{"role": "user", "content": j["prompt"]}] for j in lot]
-            params = [SamplingParams(temperature=j["temperature"], top_p=0.95, max_tokens=max_tokens, seed=j["seed"]) for j in lot]
-            outs = llm.chat(convs, params, use_tqdm=False)
-            sauver(lot, [o.outputs[0].text for o in outs])
+            prets = [ajuster(j) for j in lot]
+            convs = [[{"role": "user", "content": p}] for p, _ in prets]
+            params = [SamplingParams(temperature=j["temperature"], top_p=0.95, max_tokens=m, seed=j["seed"])
+                      for j, (_, m) in zip(lot, prets)]
+            try:
+                outs = llm.chat(convs, params, use_tqdm=False)
+                textes = [o.outputs[0].text for o in outs]
+            except Exception as e:  # un lot en échec ne doit pas arrêter tout le générateur
+                print(f"   lot ignoré ({type(e).__name__}: {str(e)[:200]})", file=sys.stderr, flush=True)
+                textes = [""] * len(lot)
+            sauver(lot, textes)
     finally:
         del llm
         gc.collect()
