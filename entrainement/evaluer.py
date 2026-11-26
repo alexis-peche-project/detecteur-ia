@@ -104,7 +104,7 @@ def det_juge(docs, spec, maxi):
             if fournisseur == "anthropic":
                 r = requests.post("https://api.anthropic.com/v1/messages", timeout=120, headers={
                     "x-api-key": os.environ["ANTHROPIC_API_KEY"], "anthropic-version": "2023-06-01"},
-                    json={"model": modele, "max_tokens": 1500, "temperature": 0, "system": systeme,
+                    json={"model": modele, "max_tokens": 4000, "system": systeme,
                           "messages": [{"role": "user", "content": user}]})
                 txt = "".join(c.get("text", "") for c in r.json()["content"])
             else:
@@ -155,6 +155,7 @@ def main():
     ap.add_argument("--classifieur-id", help="id Hugging Face publié, écrit dans calibration.json pour le site")
     ap.add_argument("--lm", action="store_true", help="mesurer le modèle de langage local (Fast-DetectGPT)")
     ap.add_argument("--lm-modele", default="Qwen/Qwen2.5-0.5B-Instruct")
+    ap.add_argument("--lm-max", type=int, default=2000, help="textes mesurés par le modèle de langage (le plus lent)")
     ap.add_argument("--heuristiques", action="store_true")
     ap.add_argument("--juge", help="ex. anthropic:claude-haiku-5-5 (payant)")
     ap.add_argument("--juge-max", type=int, default=200)
@@ -177,7 +178,11 @@ def main():
     if a.classifieur:
         print("→ classifieur entraîné", file=sys.stderr); scores["clf"] = det_classifieur(docs, a.classifieur)
     if a.lm:
-        print("→ modèle de langage (Fast-DetectGPT)", file=sys.stderr); scores["lm"] = det_lm(docs, a.lm_modele)
+        print("→ modèle de langage (Fast-DetectGPT)", file=sys.stderr)
+        ordre = np.random.RandomState(1).permutation(len(docs))[:a.lm_max]
+        lm = np.full(len(docs), np.nan)
+        lm[ordre] = det_lm([docs[i] for i in ordre], a.lm_modele)
+        scores["lm"] = lm.tolist()
     if a.heuristiques:
         print("→ signes Wikipédia et style", file=sys.stderr)
         try:

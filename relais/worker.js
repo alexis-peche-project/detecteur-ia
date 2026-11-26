@@ -86,8 +86,7 @@ export default {
       },
       body: JSON.stringify({
         model: env.MODEL || 'claude-haiku-5-5',
-        max_tokens: 1500,
-        temperature: 0,
+        max_tokens: 4000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt(text) }]
       })

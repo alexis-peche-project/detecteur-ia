@@ -106,8 +106,19 @@ def backend_vllm(jobs, sauver, modele, max_tokens=1400, **_):
     import torch
     from vllm import LLM, SamplingParams
     cap = torch.cuda.get_device_capability()[0] if torch.cuda.is_available() else 0
-    llm = LLM(model=modele, dtype="half" if cap < 8 else "auto", max_model_len=4096,
-              gpu_memory_utilization=0.90, trust_remote_code=True, enforce_eager=cap < 8)
+    n_gpu = max(1, torch.cuda.device_count())
+    reglages = dict(model=modele, dtype="half" if cap < 8 else "auto", max_model_len=4096,
+                    gpu_memory_utilization=0.90, trust_remote_code=True, enforce_eager=cap < 8)
+    llm = None
+    if n_gpu > 1:
+        try:
+            # Deux GPU (Kaggle T4 x2) : deux fois plus de mémoire, donc beaucoup plus de textes générés à la fois.
+            llm = LLM(**reglages, tensor_parallel_size=n_gpu)
+        except Exception as e:
+            print(f"   {n_gpu} GPU indisponibles pour vLLM ({type(e).__name__}), repli sur 1 GPU", file=sys.stderr, flush=True)
+            gc.collect(); torch.cuda.empty_cache()
+    if llm is None:
+        llm = LLM(**reglages)
     tok = llm.get_tokenizer()
     contexte = 4096
 
@@ -138,8 +149,9 @@ def backend_vllm(jobs, sauver, modele, max_tokens=1400, **_):
         gc.collect()
         try:
             torch.cuda.empty_cache()
-            from vllm.distributed.parallel_state import destroy_model_parallel
+            from vllm.distributed.parallel_state import destroy_distributed_environment, destroy_model_parallel
             destroy_model_parallel()
+            destroy_distributed_environment()
         except Exception:
             pass
 
@@ -148,7 +160,7 @@ class CleRefusee(Exception):
     """Clé API invalide ou sans droits : inutile de réessayer."""
 
 
-def _api_call(fournisseur, modele, j, max_tokens=1600):
+def _api_call(fournisseur, modele, j, max_tokens=4000):
     import requests
     for essai in range(5):
         try:
@@ -156,7 +168,9 @@ def _api_call(fournisseur, modele, j, max_tokens=1600):
                 r = requests.post("https://api.anthropic.com/v1/messages", timeout=120, headers={
                     "x-api-key": os.environ["ANTHROPIC_API_KEY"], "anthropic-version": "2023-06-01",
                     "content-type": "application/json"},
-                    json={"model": modele, "max_tokens": max_tokens, "temperature": j["temperature"],
+                    # Les modèles Claude récents refusent temperature / top_p / top_k (erreur 400),
+                    # et réfléchissent avant de répondre : il faut de la marge dans max_tokens.
+                    json={"model": modele, "max_tokens": max_tokens,
                           "messages": [{"role": "user", "content": j["prompt"]}]})
                 r.raise_for_status()
                 return "".join(c.get("text", "") for c in r.json()["content"])
@@ -187,7 +201,7 @@ def _api_call(fournisseur, modele, j, max_tokens=1600):
 
 def backend_api(jobs, sauver, fournisseur, modele, workers=6, **_):
     # Un premier appel seul vérifie la clé avant de lancer tous les travaux.
-    _api_call(fournisseur, modele, {**jobs[0], "prompt": "Réponds seulement : ok", "temperature": 0}, max_tokens=5)
+    _api_call(fournisseur, modele, {**jobs[0], "prompt": "Réponds seulement : ok", "temperature": 0}, max_tokens=1024)
     with ThreadPoolExecutor(workers) as ex:
         for lot in lots(jobs):
             sauver(lot, list(ex.map(lambda j: _api_call(fournisseur, modele, j), lot)))

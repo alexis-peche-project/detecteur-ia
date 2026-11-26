@@ -59,7 +59,8 @@ async function callOnce(cfg, text, signal) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model, max_tokens: 1500, temperature: 0,
+        // Les modèles Claude récents refusent temperature (erreur 400) et réfléchissent avant de répondre.
+        model, max_tokens: 4000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userPrompt(text) }]
       })
