@@ -14,6 +14,7 @@ Exemple (Colab, GPU) :
 """
 import argparse
 import json
+import os
 import math
 import random
 import subprocess
@@ -169,7 +170,7 @@ def main():
             break
         ids_path = DATA / f"difficiles_tour{tour}.txt"
         ids_path.write_text("\n".join(d["id"] for d in nouveaux))
-        cmd = [sys.executable, str(ICI / "generer.py"), "--ids", str(ids_path)]
+        cmd = [os.environ.get("DETIA_GEN_PYTHON", sys.executable), str(ICI / "generer.py"), "--ids", str(ids_path)]
         if a.generateurs:
             cmd += ["--generateurs", a.generateurs]
         subprocess.run(cmd, check=False)

@@ -179,7 +179,11 @@ def main():
     if a.lm:
         print("→ modèle de langage (Fast-DetectGPT)", file=sys.stderr); scores["lm"] = det_lm(docs, a.lm_modele)
     if a.heuristiques:
-        print("→ signes Wikipédia et style", file=sys.stderr); scores["heur"] = det_heuristiques(docs)
+        print("→ signes Wikipédia et style", file=sys.stderr)
+        try:
+            scores["heur"] = det_heuristiques(docs)
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            print(f"   ignoré : Node.js est nécessaire pour cette mesure ({e})", file=sys.stderr)
     if a.juge:
         print("→ vérification par IA", file=sys.stderr)
         ordre = np.argsort(np.random.RandomState(0).rand(len(docs)))
