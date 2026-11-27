@@ -1,1 +1,274 @@
-{"etat": "banc d’essai pas encore lancé"}
+{
+  "date": "2026-11-26",
+  "methodes": {
+    "clf": {
+      "n_humains": 1526,
+      "n_ia": 1524,
+      "auroc": 0.9981751134319219,
+      "tpr_a_1pc_fpr": 0.9849081364829396,
+      "seuil_1pc_fpr": -3.1113927364349365,
+      "tpr_a_5pc_fpr": 0.9934383202099738,
+      "seuil_5pc_fpr": -7.765081405639648,
+      "seuil": -3.9373443126678467,
+      "faux_positifs": 0.01507208387942333,
+      "faux_negatifs": 0.013123359580052493,
+      "exactitude": 0.9859016393442623,
+      "ia_reperee_par_generateur": {
+        "Qwen/Qwen2.5-7B-Instruct-AWQ": {
+          "n": 270,
+          "taux": 0.9962962962962963
+        },
+        "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4": {
+          "n": 232,
+          "taux": 0.9956896551724138
+        },
+        "Qwen/Qwen2.5-3B-Instruct": {
+          "n": 261,
+          "taux": 0.9693486590038314
+        },
+        "HuggingFaceTB/SmolLM3-3B": {
+          "n": 243,
+          "taux": 0.9917695473251029
+        },
+        "microsoft/Phi-3.5-mini-instruct": {
+          "n": 256,
+          "taux": 0.9765625
+        },
+        "claude-haiku-5-5": {
+          "n": 262,
+          "taux": 0.9923664122137404
+        }
+      },
+      "faux_positifs_par_domaine": {
+        "page web": {
+          "n": 523,
+          "taux": 0.017208413001912046
+        },
+        "article encyclopédique": {
+          "n": 498,
+          "taux": 0.006024096385542169
+        },
+        "critique de film": {
+          "n": 505,
+          "taux": 0.02178217821782178
+        }
+      }
+    },
+    "lm": {
+      "n_humains": 684,
+      "n_ia": 655,
+      "auroc": 0.9218137583143611,
+      "tpr_a_1pc_fpr": 0.566412213740458,
+      "seuil_1pc_fpr": 0.052370850962927915,
+      "tpr_a_5pc_fpr": 0.7175572519083969,
+      "seuil_5pc_fpr": 0.017550079809227907,
+      "seuil": 0.052925008410985554,
+      "faux_positifs": 0.008771929824561403,
+      "faux_negatifs": 0.433587786259542,
+      "exactitude": 0.7834204630321135,
+      "ia_reperee_par_generateur": {
+        "Qwen/Qwen2.5-7B-Instruct-AWQ": {
+          "n": 108,
+          "taux": 0.7037037037037037
+        },
+        "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4": {
+          "n": 102,
+          "taux": 0.8137254901960784
+        },
+        "Qwen/Qwen2.5-3B-Instruct": {
+          "n": 105,
+          "taux": 0.6857142857142857
+        },
+        "HuggingFaceTB/SmolLM3-3B": {
+          "n": 112,
+          "taux": 0.625
+        },
+        "microsoft/Phi-3.5-mini-instruct": {
+          "n": 104,
+          "taux": 0.5
+        },
+        "claude-haiku-5-5": {
+          "n": 124,
+          "taux": 0.14516129032258066
+        }
+      },
+      "faux_positifs_par_domaine": {
+        "page web": {
+          "n": 248,
+          "taux": 0.016129032258064516
+        },
+        "article encyclopédique": {
+          "n": 225,
+          "taux": 0.0
+        },
+        "critique de film": {
+          "n": 211,
+          "taux": 0.009478672985781991
+        }
+      }
+    },
+    "heur": {
+      "n_humains": 1526,
+      "n_ia": 1524,
+      "auroc": 0.9063797501229777,
+      "tpr_a_1pc_fpr": 0.34448818897637795,
+      "seuil_1pc_fpr": 0.53,
+      "tpr_a_5pc_fpr": 0.5853018372703412,
+      "seuil_5pc_fpr": 0.41,
+      "seuil": 0.56,
+      "faux_positifs": 0.005897771952817824,
+      "faux_negatifs": 0.7263779527559056,
+      "exactitude": 0.6340983606557377,
+      "ia_reperee_par_generateur": {
+        "Qwen/Qwen2.5-7B-Instruct-AWQ": {
+          "n": 270,
+          "taux": 0.32222222222222224
+        },
+        "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4": {
+          "n": 232,
+          "taux": 0.15517241379310345
+        },
+        "Qwen/Qwen2.5-3B-Instruct": {
+          "n": 261,
+          "taux": 0.2720306513409962
+        },
+        "HuggingFaceTB/SmolLM3-3B": {
+          "n": 243,
+          "taux": 0.3045267489711934
+        },
+        "microsoft/Phi-3.5-mini-instruct": {
+          "n": 256,
+          "taux": 0.53515625
+        },
+        "claude-haiku-5-5": {
+          "n": 262,
+          "taux": 0.04580152671755725
+        }
+      },
+      "faux_positifs_par_domaine": {
+        "page web": {
+          "n": 523,
+          "taux": 0.0076481835564053535
+        },
+        "article encyclopédique": {
+          "n": 498,
+          "taux": 0.0
+        },
+        "critique de film": {
+          "n": 505,
+          "taux": 0.009900990099009901
+        }
+      }
+    }
+  },
+  "combinaisons": {
+    "clf": {
+      "n_humains": 1526,
+      "n_ia": 1524,
+      "auroc": 0.9981751134319219,
+      "tpr_a_1pc_fpr": 0.9849081364829396,
+      "seuil_1pc_fpr": 0.26844590458476825,
+      "tpr_a_5pc_fpr": 0.9934383202099738,
+      "seuil_5pc_fpr": 0.05318857003056032,
+      "seuil": 0.20823281526142146,
+      "faux_positifs": 0.01507208387942333,
+      "faux_negatifs": 0.013123359580052493,
+      "exactitude": 0.9859016393442623
+    },
+    "lm": {
+      "n_humains": 684,
+      "n_ia": 655,
+      "auroc": 0.9218137583143611,
+      "tpr_a_1pc_fpr": 0.566412213740458,
+      "seuil_1pc_fpr": 0.6400065958698383,
+      "tpr_a_5pc_fpr": 0.7175572519083969,
+      "seuil_5pc_fpr": 0.5569970985484254,
+      "seuil": 0.6412757864717998,
+      "faux_positifs": 0.008771929824561403,
+      "faux_negatifs": 0.433587786259542,
+      "exactitude": 0.7834204630321135
+    },
+    "heur": {
+      "n_humains": 1526,
+      "n_ia": 1524,
+      "auroc": 0.9063797501229777,
+      "tpr_a_1pc_fpr": 0.34448818897637795,
+      "seuil_1pc_fpr": 0.88751068081405,
+      "tpr_a_5pc_fpr": 0.5853018372703412,
+      "seuil_5pc_fpr": 0.7218159433593324,
+      "seuil": 0.9124226607517958,
+      "faux_positifs": 0.005897771952817824,
+      "faux_negatifs": 0.7263779527559056,
+      "exactitude": 0.6340983606557377
+    },
+    "clf+lm": {
+      "n_humains": 684,
+      "n_ia": 655,
+      "auroc": 0.9975135038614348,
+      "tpr_a_1pc_fpr": 0.9893129770992366,
+      "seuil_1pc_fpr": 0.2120764175032858,
+      "tpr_a_5pc_fpr": 0.9954198473282443,
+      "seuil_5pc_fpr": 0.036041382732378266,
+      "seuil": 0.12173026118040788,
+      "faux_positifs": 0.011695906432748537,
+      "faux_negatifs": 0.007633587786259542,
+      "exactitude": 0.9902912621359223
+    },
+    "clf+heur": {
+      "n_humains": 1526,
+      "n_ia": 1524,
+      "auroc": 0.9981678035658388,
+      "tpr_a_1pc_fpr": 0.9849081364829396,
+      "seuil_1pc_fpr": 0.2874610097115706,
+      "tpr_a_5pc_fpr": 0.9934383202099738,
+      "seuil_5pc_fpr": 0.05538618877043295,
+      "seuil": 0.21169411334047938,
+      "faux_positifs": 0.014416775884665793,
+      "faux_negatifs": 0.013123359580052493,
+      "exactitude": 0.9862295081967213
+    },
+    "heur+lm": {
+      "n_humains": 684,
+      "n_ia": 655,
+      "auroc": 0.9516494799339316,
+      "tpr_a_1pc_fpr": 0.6396946564885496,
+      "seuil_1pc_fpr": 0.7276445532226004,
+      "tpr_a_5pc_fpr": 0.7862595419847328,
+      "seuil_5pc_fpr": 0.5726387660824468,
+      "seuil": 0.7398154325339023,
+      "faux_positifs": 0.007309941520467836,
+      "faux_negatifs": 0.3786259541984733,
+      "exactitude": 0.8110530246452576
+    },
+    "clf+heur+lm": {
+      "n_humains": 684,
+      "n_ia": 655,
+      "auroc": 0.9975179679478595,
+      "tpr_a_1pc_fpr": 0.9893129770992366,
+      "seuil_1pc_fpr": 0.21273551567006585,
+      "tpr_a_5pc_fpr": 0.9954198473282443,
+      "seuil_5pc_fpr": 0.03629027609825376,
+      "seuil": 0.12199710829440663,
+      "faux_positifs": 0.011695906432748537,
+      "faux_negatifs": 0.007633587786259542,
+      "exactitude": 0.9902912621359223
+    }
+  },
+  "donnees": {
+    "val": 1489,
+    "test": 3050,
+    "generateurs": [
+      "HuggingFaceTB/SmolLM3-3B",
+      "Qwen/Qwen2.5-3B-Instruct",
+      "Qwen/Qwen2.5-7B-Instruct-AWQ",
+      "claude-haiku-5-5",
+      "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
+      "microsoft/Phi-3.5-mini-instruct"
+    ],
+    "domaines": [
+      "article encyclopédique",
+      "critique de film",
+      "page web"
+    ]
+  }
+}

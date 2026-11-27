@@ -23,11 +23,12 @@ async function load(id) {
   tok = await AutoTokenizer.from_pretrained(id, { progress_callback });
   // Version du modèle à charger (compressée « q8 » ou complète « fp32 »), choisie à l'export
   // après contrôle de précision et indiquée dans config.json.
-  let dtype = 'q8';
+  // Sans indication, version complète : les premières versions compressées publiées n'étaient pas fidèles.
+  let dtype = 'fp32';
   try {
     const cfg = await (await fetch(`https://huggingface.co/${id}/resolve/main/config.json`)).json();
-    dtype = cfg?.['transformers.js_config']?.dtype || 'q8';
-  } catch { /* garder q8 */ }
+    dtype = cfg?.['transformers.js_config']?.dtype || 'fp32';
+  } catch { /* garder fp32 */ }
   try {
     model = await AutoModelForSequenceClassification.from_pretrained(id, { device, dtype, progress_callback });
   } catch (e) {

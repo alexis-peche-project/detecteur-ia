@@ -255,6 +255,13 @@ $('go').addEventListener('click', analyse);
 
 /* ---------- Affichage ---------- */
 const sig = z => 1 / (1 + Math.exp(-z));
+function echelle(p, s5, s1) {
+  if (!(s5 > 0 && s1 > s5 && s1 < 1)) return p;
+  if (p <= s5) return 0.4 * p / s5;
+  if (p <= s1) return 0.4 + 0.2 * (p - s5) / (s1 - s5);
+  return 0.6 + 0.4 * (p - s1) / (1 - s1);
+}
+
 function combine(res) {
   const H = res.heur;
   const f = { heur: H.score / 100 };
@@ -270,7 +277,10 @@ function combine(res) {
     if (c2) cal = { ...c2, p: (1 - WEIGHTS.judge) * c2.p + WEIGHTS.judge * juge };
   }
   if (cal) {
-    let p = cal.p;
+    // Les seuils mesurés au banc d'essai deviennent les limites des verdicts :
+    // au-delà du seuil à 1 % de faux positifs → 60 % et plus (« probablement IA »),
+    // entre les seuils à 5 % et 1 % → 40 à 60 % (« incertain »), en dessous → moins de 40 %.
+    let p = echelle(cal.p, cal.seuil5, cal.seuil1);
     if (H.strong) p = Math.max(p, 0.85);
     E = { p, score: Math.round(p * 100), calibrated: cal };
   } else {
