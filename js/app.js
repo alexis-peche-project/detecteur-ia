@@ -1,6 +1,7 @@
 import { analyseHeuristics, splitSentences, words } from './heuristics.js';
 import { lmSummary, ensemble, verdict, calibrate, calibratedEnsemble, detectLang } from './scoring.js';
 import { judge, PROVIDERS } from './llm-judge.js';
+import { rewrite, loadStyles } from './rewrite.js';
 import { extractText, ACCEPT } from './docs.js';
 import { RELAY_URL, MELD_URL, CLASSIFIER_ID, WEIGHTS, DEFAULT_CALIBRATION } from './config.js';
 
@@ -488,6 +489,19 @@ $('calGo').addEventListener('click', async () => {
 
 /* ---------- Fiabilité mesurée (banc d'essai) ---------- */
 const NOMS = { clf: 'Détecteur entraîné', lm: 'Modèle de langage (Fast-DetectGPT)', heur: 'Signes Wikipédia et style', juge: 'Vérification par IA', meld: 'MELD' };
+const CONSIGNES = { ecrire: 'Écrit à partir d\'un sujet', humaniser: 'Demandé « comme un humain »', reecrire: 'Paraphrase d\'un texte humain' };
+function consignes(B) {
+  const C = B.methodes?.clf?.ia_reperee_par_consigne;
+  if (!C) return '';
+  const lignes = Object.entries(C).map(([k, v]) => {
+    const m = k.match(/^réécrit \((.+)\)$/);
+    const nom = m ? `Réécrit par l'outil du site · ${m[1]}` : (CONSIGNES[k] || k);
+    return `<tr><td>${esc(nom)}</td><td class="n">${v.n}</td><td class="barc"><div class="hbar"><i style="width:${Math.round(v.taux * 100)}%"></i></div></td><td class="n">${(Math.round(v.taux * 1000) / 10).toLocaleString('fr-FR')} %</td></tr>`;
+  }).join('');
+  return `<h3 style="margin-top:24px">Détecteur entraîné : textes d'IA repérés selon la façon dont ils ont été produits</h3>
+    <div class="scroll"><table><thead><tr><th>Consigne donnée à l'IA</th><th class="n">Textes</th><th colspan="2">Repérés au seuil</th></tr></thead><tbody>${lignes}</tbody></table></div>`;
+}
+
 async function renderPerf() {
   let B = null;
   try { const r = await fetch('resultats/benchmark.json', { cache: 'no-cache' }); if (r.ok) B = await r.json(); } catch { /* absent */ }
@@ -500,6 +514,7 @@ async function renderPerf() {
   const best = Object.entries(B.combinaisons || {}).sort((a, b) => b[1].tpr_a_1pc_fpr - a[1].tpr_a_1pc_fpr)[0];
   const combo = best ? row('Combinaison : ' + best[0].split('+').map(k => NOMS[k] || k).join(' + '), best[1]) : '';
   $('perfBody').innerHTML = `<div class="scroll"><table><thead><tr><th>Méthode</th><th class="n">AUROC</th><th colspan="2">IA repérée à 1 % de faux positifs</th><th class="n">Faux positifs au seuil</th></tr></thead><tbody>${meth}${combo}</tbody></table></div>
+    ${consignes(B)}
     <p class="small">Mesuré le ${esc(B.date)} sur ${B.donnees.test} textes de test en français (${esc(B.donnees.domaines.join(', '))}), générés par ${esc(B.donnees.generateurs.join(', '))}. Ces chiffres valent pour des textes semblables : ils seront moins bons sur des genres ou des IA absents du test.</p>`;
 }
 
@@ -508,3 +523,59 @@ loadCalibration();
 const draft = store.get('detia-draft');
 if (draft) txt.value = draft;
 updCount();
+
+/* ---------- Réécriture dans un style choisi ---------- */
+let rwStyle = store.get('detia-rw-style') || 'naturel';
+let rwAbort = null;
+loadStyles().then(R => {
+  if (!R.styles.some(x => x.id === rwStyle)) rwStyle = R.styles[0].id;
+  const box = $('rwStyles');
+  box.innerHTML = R.styles.map(x => `<button type="button" role="radio" data-id="${esc(x.id)}" aria-checked="${x.id === rwStyle}"><b>${esc(x.nom)}</b><small>${esc(x.description)}</small></button>`).join('');
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button[data-id]');
+    if (!b) return;
+    rwStyle = b.dataset.id;
+    store.set('detia-rw-style', rwStyle);
+    box.querySelectorAll('button').forEach(x => x.setAttribute('aria-checked', String(x === b)));
+  });
+  $('rwInt').innerHTML = R.intensites.map(x => `<option value="${esc(x.id)}">${esc(x.nom)}</option>`).join('');
+  $('rwInt').value = store.get('detia-rw-int') || R.intensites[0].id;
+  $('rwInt').addEventListener('change', e => store.set('detia-rw-int', e.target.value));
+}).catch(() => { $('rwState').textContent = 'Styles indisponibles.'; $('rwGo').disabled = true; });
+
+const nbSignes = t => analyseHeuristics(t).found.reduce((a, f) => a + (f.count || f.n || f.ex?.length || 1), 0);
+
+$('rwGo').addEventListener('click', async () => {
+  const text = txt.value.trim();
+  if ((text.match(/\S+/g) || []).length < 20) { $('rwState').textContent = 'Collez d\'abord un texte (20 mots au moins).'; txt.focus(); return; }
+  if (provSel.value !== 'relais' && !$('apiKey').value.trim()) {
+    $('rwState').textContent = 'Ajoutez une clé API dans les réglages de l\'IA.';
+    $('apiBox').open = true; $('apiBox').scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+  }
+  const cfg = { provider: provSel.value, apiKey: $('apiKey').value.trim(), model: $('model').value.trim(), relayUrl: RELAY_URL };
+  rwAbort = new AbortController();
+  $('rwGo').disabled = true; $('rwCancel').classList.remove('hidden');
+  $('rwState').textContent = 'Réécriture…';
+  try {
+    const out = await rewrite(cfg, text, {
+      style: rwStyle, intensite: $('rwInt').value, signal: rwAbort.signal,
+      onProgress: (k, n) => { $('rwState').textContent = n > 1 ? `Réécriture… partie ${Math.min(k + 1, n)} sur ${n}` : 'Réécriture…'; }
+    });
+    $('rwText').textContent = out;
+    const nom = $('rwStyles').querySelector(`[data-id="${rwStyle}"] b`)?.textContent || '';
+    $('rwTitle').textContent = `Texte réécrit · ${nom}`;
+    $('rwSigns').textContent = `Signes Wikipédia : ${nbSignes(text)} dans l'original, ${nbSignes(out)} après réécriture`;
+    $('rwOut').classList.remove('hidden');
+    $('rwState').textContent = `${(out.match(/\S+/g) || []).length} mots`;
+  } catch (e) {
+    $('rwState').textContent = e.name === 'AbortError' ? 'Annulé.' : `Erreur : ${e.message}`;
+  } finally {
+    $('rwGo').disabled = false; $('rwCancel').classList.add('hidden'); rwAbort = null;
+  }
+});
+$('rwCancel').addEventListener('click', () => rwAbort?.abort());
+$('rwCopy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('rwText').textContent); $('rwState').textContent = 'Copié.'; } catch { $('rwState').textContent = 'Copie impossible : sélectionnez le texte.'; }
+});
+$('rwReplace').addEventListener('click', () => { txt.value = $('rwText').textContent; updCount(); txt.dispatchEvent(new Event('input')); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+$('rwUse').addEventListener('click', () => { txt.value = $('rwText').textContent; updCount(); txt.dispatchEvent(new Event('input')); window.scrollTo({ top: 0, behavior: 'smooth' }); analyse(); });

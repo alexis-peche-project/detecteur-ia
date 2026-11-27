@@ -45,7 +45,7 @@
   </fieldset>
 
   <details class="api" id="apiBox">
-    <summary>Réglages de la vérification par IA</summary>
+    <summary>Réglages de l'IA (vérification et réécriture)</summary>
     <div class="apiGrid">
       <label>Fournisseur<select id="provider"></select></label>
       <label>Modèle<input id="model" autocomplete="off" spellcheck="false"></label>
@@ -99,6 +99,28 @@
       </div>
     </div>
   </div>
+</div></section>
+
+<section class="band rew" id="rew"><div class="wrap">
+  <h2>Réécrire le texte</h2>
+  <p class="lead">Une IA réécrit le texte ci-dessus dans le style choisi et retire les tics d'écriture recensés par Wikipédia. Elle utilise le fournisseur et la clé des réglages de l'IA.</p>
+  <div class="styles" id="rwStyles" role="radiogroup" aria-label="Style de réécriture"></div>
+  <div class="bar">
+    <label class="inl">Intensité <select id="rwInt"></select></label>
+    <button class="main" id="rwGo">Réécrire</button>
+    <button id="rwCancel" class="hidden">Annuler</button>
+    <span class="count" id="rwState" role="status"></span>
+  </div>
+  <div id="rwOut" class="hidden">
+    <div class="rwHead"><h3 id="rwTitle">Texte réécrit</h3><span class="small" id="rwSigns"></span></div>
+    <div class="annot rwText" id="rwText"></div>
+    <div class="bar">
+      <button id="rwCopy">Copier</button>
+      <button id="rwUse">Analyser ce texte</button>
+      <button id="rwReplace">Remplacer le texte d'origine</button>
+    </div>
+  </div>
+  <p class="small">Relisez toujours le résultat : une réécriture peut déplacer une nuance ou une information.</p>
 </div></section>
 
 <section class="band perf" id="perf"><div class="wrap">

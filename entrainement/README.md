@@ -29,6 +29,19 @@ Ainsi, le test ne contient aucun sujet déjà vu. Un générateur peut être exc
 3. **La quantité.** Pangram est parti d'environ 1 million de documents ; ce pipeline vise 10 000 à 20 000 textes sur un GPU gratuit.
    Augmentez `--par-source` si vous disposez de plus de temps de calcul.
 
+## Améliorer un détecteur déjà entraîné
+
+Ajoutez la sortie du run précédent comme entrée Kaggle (Add Input → votre notebook) : le notebook reprend
+les textes déjà collectés et générés, puis
+- ajoute `AJOUT_HUMAINS` nouveaux textes humains par source (`donnees.py --ajouter`), avec leurs miroirs ;
+- réécrit `HUMANISES` textes d'IA dans les styles de l'outil de réécriture du site (`generer.py --humaniser`,
+  consignes dans `js/reecriture.json`), pour que le détecteur reconnaisse les textes « humanisés » ;
+- réentraîne sur l'ensemble et publie le résultat. Le banc d'essai donne le taux de textes repérés
+  pour chaque consigne, dont chaque style de réécriture.
+
+La compression du modèle pour le navigateur est vérifiée (`quantifier.py`) : la version compressée n'est publiée
+que si ses scores restent proches de ceux du modèle complet.
+
 ## Tester sans GPU
 
 ```bash

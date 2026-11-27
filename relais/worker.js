@@ -8,6 +8,8 @@
 //   MAX_CHARS          (variable, optionnelle) par défaut 20000
 // Liaison optionnelle RATE_LIMITER (voir wrangler.toml) pour limiter les abus.
 
+import R from '../js/reecriture.json';
+
 const SYSTEM_PROMPT = `Tu es un expert en linguistique forensique chargé d'estimer si un texte a été rédigé par un modèle de langage (ChatGPT, Claude, Gemini, Mistral, Llama…) ou par un humain.
 
 Méthode : examine le texte comme le ferait un éditeur expérimenté du WikiProject AI Cleanup de Wikipédia. Cherche des faisceaux d'indices, jamais un indice isolé.
@@ -71,11 +73,29 @@ export default {
       if (!success) return json({ error: 'Trop de demandes, réessayez dans une minute.' }, 429, c.headers);
     }
 
-    let text;
-    try { ({ text } = await request.json()); } catch { return json({ error: 'Requête invalide.' }, 400, c.headers); }
+    let text, mode, style, intensite;
+    try { ({ text, mode, style, intensite } = await request.json()); } catch { return json({ error: 'Requête invalide.' }, 400, c.headers); }
     if (typeof text !== 'string' || !text.trim()) return json({ error: 'Texte manquant.' }, 400, c.headers);
     const max = Number(env.MAX_CHARS || 20000);
     if (text.length > max) text = text.slice(0, max);
+
+    // Réécriture dans un style du site (js/reecriture.json) : seules ces consignes sont acceptées.
+    if (mode === 'reecrire') {
+      const s = R.styles.find(x => x.id === style) || R.styles[0];
+      const i = R.intensites.find(x => x.id === intensite) || R.intensites[0];
+      const rr = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: env.MODEL || 'claude-haiku-5-5', max_tokens: 8000,
+          system: `${R.consigne}\n\n${s.consigne}\n${i.consigne}`,
+          messages: [{ role: 'user', content: R.demande.replace('{texte}', text) }]
+        })
+      });
+      const b = await rr.json().catch(() => ({}));
+      if (!rr.ok) return json({ error: b?.error?.message || 'Erreur du fournisseur.' }, 502, c.headers);
+      return json({ texte: (b.content || []).map(x => x.text || '').join('').trim() }, 200, c.headers);
+    }
 
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

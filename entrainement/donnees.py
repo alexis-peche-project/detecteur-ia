@@ -103,6 +103,47 @@ def depuis_local(path, domaine):
     return out
 
 
+def ajouter(a, deja):
+    import json
+    marque = DATA / "ajouts.json"
+    faits = json.loads(marque.read_text()) if marque.exists() else []
+    if a.etiquette in faits:
+        print(f"Déjà fait : ajout « {a.etiquette} » ({len(deja)} textes humains).")
+        return
+    rng = random.Random(f"{a.seed}-{a.etiquette}")  # autre tirage que la collecte d'origine
+    connus = {r["id"] for r in deja}
+    rows = []
+    voulues = set(a.sources.split(","))
+    for src in SOURCES:
+        if src["nom"] not in voulues:
+            continue
+        try:
+            # On lit plus loin dans le flux pour trouver assez de textes nouveaux.
+            docs = depuis_hub(src, a.ajouter * 2, rng)
+        except Exception as e:
+            print(f"   source ignorée : {e}", file=sys.stderr)
+            continue
+        n = 0
+        for d in docs:
+            cle = d["text"][:200]
+            doc_id = f"h-{d['source']}-{hashlib.sha1(cle.encode()).hexdigest()[:12]}"
+            if doc_id in connus:
+                continue
+            connus.add(doc_id)
+            split = split_de(doc_id)
+            if split == "train" and rng.random() < a.pool:
+                split = "pool"
+            rows.append({"id": doc_id, "label": 0, "lang": "fr", "split": split, "generator": "humain", **d})
+            n += 1
+            if n >= a.ajouter:
+                break
+    ecrire_jsonl(DATA / "humains.jsonl", rows, mode="a")
+    marque.write_text(json.dumps(faits + [a.etiquette]))
+    from collections import Counter
+    print(f"{len(rows)} textes humains ajoutés (total {len(deja) + len(rows)})")
+    print("par source :", dict(Counter(r["source"] for r in rows)))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--par-source", type=int, default=3000, help="textes par source publique")
@@ -113,8 +154,14 @@ def main():
                     help="part des textes d'entraînement gardés en réserve pour la recherche d'exemples difficiles")
     ap.add_argument("--seed", type=int, default=13)
     ap.add_argument("--force", action="store_true", help="refaire la collecte même si elle existe déjà")
+    ap.add_argument("--ajouter", type=int, default=0,
+                    help="ajoute ce nombre de nouveaux textes par source à une collecte existante")
+    ap.add_argument("--etiquette", default="ajout-1",
+                    help="nom de l'ajout : un ajout déjà fait sous ce nom n'est pas refait (reprise sans doublon)")
     a = ap.parse_args()
     deja = lire_jsonl(DATA / "humains.jsonl")
+    if deja and a.ajouter:
+        return ajouter(a, deja)
     if deja and not a.force:
         print(f"Déjà fait : {len(deja)} textes humains dans {DATA / 'humains.jsonl'} (--force pour refaire).")
         return

@@ -138,13 +138,18 @@ def det_meld(docs, url):
 
 def detail(y, s, docs, seuil):
     """Résultats par générateur (IA repérée) et par domaine (faux positifs), au seuil donné."""
-    par_gen, par_dom = defaultdict(list), defaultdict(list)
+    par_gen, par_dom, par_tache = defaultdict(list), defaultdict(list), defaultdict(list)
     for yi, si, d in zip(y, s, docs):
         if math.isnan(si):
             continue
         (par_gen[d.get("generator", "?")] if yi == 1 else par_dom[d.get("domain", "?")]).append(si > seuil)
+        if yi == 1:
+            # « style:journalistique:forte » → « réécrit (journalistique) » : robustesse à l'outil de réécriture du site
+            t = str(d.get("task", "?"))
+            par_tache[f"réécrit ({t.split(':')[1]})" if t.startswith("style:") else t].append(si > seuil)
     return {
         "ia_reperee_par_generateur": {g: {"n": len(v), "taux": float(np.mean(v))} for g, v in par_gen.items()},
+        "ia_reperee_par_consigne": {g: {"n": len(v), "taux": float(np.mean(v))} for g, v in sorted(par_tache.items())},
         "faux_positifs_par_domaine": {g: {"n": len(v), "taux": float(np.mean(v))} for g, v in par_dom.items()},
     }
 

@@ -44,6 +44,12 @@ def run(*args):
 
 run("donnees.py", "--sources", "", "--local", str(src), "--domaine", "test")
 run("generer.py", "--generateurs", "factice")
+run("generer.py", "--generateurs", "factice", "--humaniser", "15")
+run("generer.py", "--generateurs", "factice", "--humaniser", "15")  # reprise : rien à refaire
+ia = [json.loads(l) for l in open(tmp / "donnees" / "ia.jsonl", encoding="utf-8")]
+styles = [r for r in ia if r["task"].startswith("style:")]
+assert len(styles) == 15, len(styles)
+assert all(r["split"] in ("train", "val", "test", "pool") and r["pair_id"].startswith("h-") for r in styles)
 run("entrainer.py", "--base", str(base), "--epoques", "1", "--tours", "1", "--difficiles-par-tour", "20",
     "--generateurs", "factice", "--batch", "8", "--longueur", "128", "--sortie", str(tmp / "clf"))
 run("exporter.py", "--source", str(tmp / "clf"), "--sortie", str(tmp / "clf-onnx"))
@@ -53,6 +59,9 @@ cal = json.loads((tmp / "sortie" / "js" / "calibration.json").read_text())
 bench = json.loads((tmp / "sortie" / "resultats" / "benchmark.json").read_text())
 assert "clf" in bench["methodes"] and "heur" in bench["methodes"], bench.keys()
 assert "clf+heur" in cal["ensembles"], cal["ensembles"].keys()
-assert (tmp / "clf-onnx" / "onnx" / "model_quantized.onnx").exists()
+assert any(k.startswith("réécrit (") for k in bench["methodes"]["clf"]["ia_reperee_par_consigne"]), bench["methodes"]["clf"]["ia_reperee_par_consigne"]
+cfg = json.loads((tmp / "clf-onnx" / "config.json").read_text())
+assert cfg["transformers.js_config"]["dtype"] in ("q8", "fp32"), cfg.get("transformers.js_config")
+assert (tmp / "clf-onnx" / "onnx" / "model.onnx").exists()
 print("\nTOUS LES TESTS PASSENT. Dossier :", tmp)
 print("Combinaisons réglées :", list(cal["ensembles"]))

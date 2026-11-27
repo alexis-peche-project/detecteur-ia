@@ -9,6 +9,9 @@ Trois consignes, pour couvrir les usages réels :
   humaniser  : même chose, avec la demande d'écrire « comme un humain » (tentative de contournement) ;
   reecrire   : réécriture complète d'un texte humain (paraphrase par IA).
 
+Option --humaniser N : réécrit N textes d'IA déjà créés dans les styles de l'outil de réécriture du site
+(js/reecriture.json). Le détecteur apprend ainsi à reconnaître les textes « humanisés ».
+
 Générateurs (option --generateurs, séparés par des virgules) :
   vllm:<modèle Hugging Face>      modèle ouvert sur le GPU (Colab)
   anthropic:<modèle>              clé dans ANTHROPIC_API_KEY
@@ -28,6 +31,8 @@ import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
+
+from pathlib import Path
 
 from commun import DATA, ecrire_jsonl, lire_jsonl, nb_mots
 
@@ -61,6 +66,48 @@ def prompt(doc, tache):
     p = (f"Écris un texte en français {style}, d'environ {n} mots, sur le sujet suivant : {doc['sujet']}\n"
          f"Donne uniquement le texte, sans introduction ni commentaire.")
     return p + ("\n" + CONSIGNE_HUMAIN if tache == "humaniser" else "")
+
+
+REECRITURE = Path(__file__).resolve().parent.parent / "js" / "reecriture.json"
+
+
+def prompt_style(texte, style, intensite, r):
+    """Même consigne que l'outil de réécriture du site (système et demande réunis en un message)."""
+    s = next(x for x in r["styles"] if x["id"] == style)
+    i = next(x for x in r["intensites"] if x["id"] == intensite)
+    return f"{r['consigne']}\n\n{s['consigne']}\n{i['consigne']}\n\n" + r["demande"].replace("{texte}", texte)
+
+
+def travaux_humaniser(n, gens, sortie, seed, deja):
+    """Travaux de réécriture de textes d'IA existants dans les styles du site."""
+    r = json.loads(REECRITURE.read_text(encoding="utf-8"))
+    ia = lire_jsonl(sortie)
+    faits = sum(1 for x in ia if str(x.get("task", "")).startswith("style:"))
+    reste = max(0, n - faits)
+    if not reste:
+        print(f"Déjà fait : {faits} textes réécrits dans les styles du site.", file=sys.stderr)
+        return {}
+    sources = sorted((x for x in ia if x.get("task") in ("ecrire", "humaniser") and nb_mots(x["text"]) >= 80),
+                     key=lambda x: x["id"])
+    rng = random.Random(seed)
+    rng.shuffle(sources)
+    par_gen = {g: [] for g in gens}
+    for k, x in enumerate(sources):
+        if sum(len(v) for v in par_gen.values()) >= reste:
+            break
+        style = rng.choice(r["styles"])["id"]
+        intensite = rng.choice(r["intensites"])["id"]
+        temperature, graine = round(rng.uniform(0.6, 1.0), 2), rng.randint(0, 10**6)
+        cle = "|".join([x["id"], style, intensite, str(seed)])
+        jid = "s-" + hashlib.sha1(cle.encode()).hexdigest()[:12]
+        if jid in deja:
+            continue
+        g = gens[k % len(gens)]
+        h = {"id": x["pair_id"], "split": x["split"], "source": x["source"], "domain": x["domain"], "lang": x.get("lang", "fr")}
+        par_gen[g].append({"id": jid, "h": h, "tache": f"style:{style}:{intensite}",
+                           "prompt": prompt_style(x["text"], style, intensite, r),
+                           "temperature": temperature, "seed": graine})
+    return par_gen
 
 
 def nettoyer_sortie(t):
@@ -227,8 +274,15 @@ def main():
     ap.add_argument("--max", type=int, default=0, help="limite de textes humains (0 = tous)")
     ap.add_argument("--sortie", default=str(DATA / "ia.jsonl"))
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--humaniser", type=int, default=0,
+                    help="réécrit ce nombre de textes d'IA existants dans les styles du site (au total, reprise comprise)")
     a = ap.parse_args()
     rng = random.Random(a.seed)
+
+    deja = {r["id"] for r in lire_jsonl(a.sortie)}
+    gens = [g.strip() for g in a.generateurs.split(",") if g.strip()]
+    if a.humaniser:
+        return lancer(travaux_humaniser(a.humaniser, gens, a.sortie, a.seed, deja), a)
 
     humains = lire_jsonl(DATA / "humains.jsonl")
     if a.ids:
@@ -239,9 +293,6 @@ def main():
     rng.shuffle(humains)
     if a.max:
         humains = humains[:a.max]
-    deja = {r["id"] for r in lire_jsonl(a.sortie)}
-    gens = [g.strip() for g in a.generateurs.split(",") if g.strip()]
-
     # Répartit les travaux par générateur (un modèle chargé à la fois sur le GPU).
     par_gen = {g: [] for g in gens}
     k = 0
@@ -259,7 +310,10 @@ def main():
                 continue
             par_gen[g].append({"id": jid, "h": h, "tache": tache, "prompt": prompt(h, tache),
                                "temperature": temperature, "seed": seed})
+    lancer(par_gen, a)
 
+
+def lancer(par_gen, a):
     total = 0
     for g, jobs in par_gen.items():
         if not jobs:
