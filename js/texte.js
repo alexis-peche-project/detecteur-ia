@@ -5,6 +5,10 @@ import { extractText, ACCEPT } from './docs.js';
 import { MELD_URL } from './config.js';
 import { $, esc, fmt, pct, store, download, initReglagesIA, mascotte, humeurDuScore, zoneDepot } from './commun.js';
 import { analyserTexte, loadCalibration, classifierId, cancelWorkers, sig, CAL } from './moteur.js';
+import { testPerroquet } from './perroquet.js';
+import { transcrire, estImage } from './manuscrit.js';
+import { surligner } from './comparer.js';
+import { phraseClasse } from './classe.js';
 
 const ia = initReglagesIA();
 const humeur = mascotte();
@@ -20,12 +24,22 @@ function updCount() {
 }
 txt.addEventListener('input', updCount);
 
-$('file').accept = ACCEPT;
+$('file').accept = ACCEPT + ',image/*';
 async function loadFile(file) {
   const info = $('fileInfo');
   info.classList.remove('err');
   info.textContent = `Lecture de « ${file.name} »…`;
   try {
+    if (estImage(file)) {
+      // Photo d'une copie manuscrite : transcription par l'IA choisie dans les réglages.
+      if (!ia.pret() || $('provider').value === 'relais') { info.classList.add('err'); info.textContent = 'Pour transcrire une photo de copie manuscrite, ajoutez votre clé API (Claude, GPT ou Mistral) dans les réglages de l\'IA.'; ia.ouvrir(); return; }
+      info.textContent = `Transcription de « ${file.name} » par l'IA…`;
+      const t = await transcrire(ia.cfg(), file);
+      txt.value = t.texte;
+      updCount();
+      info.textContent = t.resume + ' Vérifiez la transcription avant l\'analyse.';
+      return;
+    }
     const text = await extractText(file, (i, n) => { info.textContent = `Lecture de « ${file.name} » : page ${i} sur ${n}…`; });
     txt.value = text.trim();
     updCount();
@@ -105,6 +119,8 @@ function render(res) {
   if (H.n < 80) notes.push('Texte court : résultat peu fiable.');
   if (H.strong) notes.push('Formule d\'assistant ou artefact de chatbot trouvé : signe très fort.');
   notes.push(`${H.n.toLocaleString('fr-FR')} mots, ${res.sentences.length.toLocaleString('fr-FR')} phrases.`);
+  const cl = phraseClasse(E.score);
+  if (cl) notes.push(cl);
   $('note').textContent = notes.join(' ');
 
   const L = res.lm, J = res.judge, C = res.clf, M = res.meld;
@@ -172,6 +188,30 @@ function render(res) {
     return `<li><div class="t">${esc(f.c.name)}<span>× ${f.ex.length}</span></div><p>${esc(f.c.why)}</p><p>${u.map(x => '<code>' + esc(x) + '</code>').join(' ')}</p></li>`;
   }).join('') : '<li class="empty">Aucun signe typique repéré.</li>';
 }
+
+/* ---------- Test du perroquet ---------- */
+let perroquetAbort = null;
+$('perroquetGo').addEventListener('click', async () => {
+  const out = $('perroquetOut');
+  if (!ia.pret() || $('provider').value === 'relais') { out.innerHTML = '<p class="small">Le test du perroquet a besoin de votre clé API (Claude, GPT ou Mistral) : ajoutez-la dans les réglages de l\'IA.</p>'; ia.ouvrir(); return; }
+  ia.save();
+  perroquetAbort = new AbortController();
+  $('perroquetGo').disabled = true;
+  try {
+    const r = await testPerroquet(ia.cfg(), txt.value, {
+      signal: perroquetAbort.signal,
+      onProgress: (i, n) => { out.innerHTML = `<p class="small">Mâchou devine la suite du passage ${Math.min(i + 1, n)} sur ${n}…</p>`; }
+    });
+    out.innerHTML = `<div class="imgVerdict ${r.niveau.cls}"><b>${esc(r.niveau.titre)}</b><span>${esc(r.niveau.texte)} En moyenne, ${Math.round(r.moyenne * 100)} % des suites de trois mots de la vraie suite se retrouvent dans la suite devinée.</span></div>` +
+      r.extraits.map((e, i) => `<details class="fantome"${i === 0 ? ' open' : ''}><summary><b>Passage ${i + 1}</b><span class="small">${Math.round(e.r3 * 100)} % d'expressions retrouvées</span></summary>
+        <p class="small debut">Début donné à l'IA : « ${esc(e.debut.slice(0, 300))}${e.debut.length > 300 ? '…' : ''} »</p>
+        <div class="duo"><div><b>Vraie suite</b><div class="annot">${surligner(e.suite, e.devine)}</div></div><div><b>Suite devinée par l'IA</b><div class="annot">${surligner(e.devine, e.suite)}</div></div></div></details>`).join('') +
+      '<p class="small">Indicateur expérimental : il n\'entre pas dans le score et n\'a pas été mesuré par le banc d\'essai. Il fonctionne mieux quand l\'IA qui devine est de la même famille que celle qui aurait écrit le texte.</p>';
+  } catch (e) {
+    out.innerHTML = `<p class="small">${esc(e.name === 'AbortError' ? 'Test annulé.' : e.message)}</p>`;
+  }
+  $('perroquetGo').disabled = false;
+});
 
 /* ---------- Rapport ---------- */
 function report(res) {

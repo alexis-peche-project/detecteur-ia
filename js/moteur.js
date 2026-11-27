@@ -42,7 +42,12 @@ export function runWorker(kind, msg, onEvent) {
       else if (m.type === 'cancelled') reject(new Error('Analyse annulée.'));
       else onEvent?.(m);
     };
-    w.onerror = e => reject(new Error(e.message || 'Le modèle n\'a pas pu démarrer.'));
+    w.onerror = e => {
+      // Worker hors d'usage (bibliothèque non chargée, plantage) : on le recrée au prochain appel.
+      w.terminate();
+      if (workers[kind] === w) delete workers[kind];
+      reject(new Error(e.message || 'Le modèle n\'a pas pu démarrer (connexion ?).'));
+    };
     w.postMessage({ type: 'analyse', ...msg });
   });
 }

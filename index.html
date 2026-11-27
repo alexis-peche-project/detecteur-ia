@@ -31,7 +31,7 @@
       <g class="miette"><rect x="152" y="104" width="56" height="34" rx="9" fill="#FFE27A" stroke="#1D1A4E" stroke-width="4"/>
         <text x="180" y="128" text-anchor="middle" font-family="Silkscreen, monospace" font-size="17" fill="#1D1A4E">IA</text></g>
     </svg><span>Détecteur IA</span></a>
-  <nav aria-label="Pages du site"><a href="index.html" aria-current="page">Texte</a><a href="lot.html">Plusieurs documents</a><a href="images.html">Images</a><a href="reecrire.html">Réécrire</a><a href="methode.html">Fiabilité et méthode</a></nav>
+  <nav aria-label="Pages du site"><a href="index.html" aria-current="page">Texte</a><a href="lot.html">Plusieurs documents</a><a href="images.html">Images</a><a href="reecrire.html">Réécrire</a><a href="enseignants.html">Enseignants</a><a href="transparence.html">Transparence</a><a href="methode.html">Fiabilité</a></nav>
 </div></header>
 <main>
 <section class="band hero-band"><div class="wrap">
@@ -66,7 +66,7 @@
 
   <div class="drop" id="drop">
     <label for="txt" class="sr">Texte à analyser</label>
-    <textarea id="txt" placeholder="Collez votre texte ici, ou déposez un document (PDF, Word, ODT, TXT…)"></textarea>
+    <textarea id="txt" placeholder="Collez votre texte ici, ou déposez un document (PDF, Word, ODT, TXT…) ou la photo d'une copie manuscrite"></textarea>
     <div class="dropHint" aria-hidden="true">Déposez le document ici</div>
   </div>
   <div class="bar">
@@ -149,6 +149,12 @@
         </div>
         <p class="small" id="copied" role="status"></p>
       </div>
+    </div>
+    <div class="perroquet">
+      <h2>Le test du perroquet</h2>
+      <p class="small">Le site coupe quelques passages en deux et demande à une IA d'écrire la suite. Si elle retombe sur les mêmes formulations que le texte, c'est que celui-ci suit le chemin le plus prévisible pour une IA. Utilise la clé des réglages de l'IA (3 appels).</p>
+      <div class="bar"><button id="perroquetGo">Lancer le test du perroquet</button></div>
+      <div id="perroquetOut"></div>
     </div>
   </div>
 </div></section>

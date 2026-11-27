@@ -31,12 +31,12 @@
       <g class="miette"><rect x="152" y="104" width="56" height="34" rx="9" fill="#FFE27A" stroke="#1D1A4E" stroke-width="4"/>
         <text x="180" y="128" text-anchor="middle" font-family="Silkscreen, monospace" font-size="17" fill="#1D1A4E">IA</text></g>
     </svg><span>Détecteur IA</span></a>
-  <nav aria-label="Pages du site"><a href="index.html">Texte</a><a href="lot.html" aria-current="page">Plusieurs documents</a><a href="images.html">Images</a><a href="reecrire.html">Réécrire</a><a href="methode.html">Fiabilité et méthode</a></nav>
+  <nav aria-label="Pages du site"><a href="index.html">Texte</a><a href="lot.html" aria-current="page">Plusieurs documents</a><a href="images.html">Images</a><a href="reecrire.html">Réécrire</a><a href="enseignants.html">Enseignants</a><a href="transparence.html">Transparence</a><a href="methode.html">Fiabilité</a></nav>
 </div></header>
 <main>
 <section class="band hero-band"><div class="wrap">
   <h1>Analyser plusieurs documents</h1>
-  <p class="lead">Déposez autant de documents que vous voulez (PDF, Word, ODT, TXT…) ou collez plusieurs textes. Chacun est analysé dans votre navigateur, puis un tableau récapitule les scores. Pratique pour une pile de copies ou de candidatures.</p>
+  <p class="lead">Déposez autant de documents que vous voulez (PDF, Word, ODT, TXT, ou photos de copies manuscrites) ou collez plusieurs textes. Chacun est analysé dans votre navigateur, puis un tableau récapitule les scores. Pratique pour une pile de copies ou de candidatures.</p>
   <div class="drop dropZone" id="lotDrop">
     <p><b>Déposez vos documents ici</b><br><span class="small">ou</span></p>
     <label class="btn" for="lotFile">Choisir des fichiers</label>
@@ -56,6 +56,16 @@
     <label class="opt"><input type="checkbox" id="useLmLot">
       <span><b>Modèle de langage local</b><small>Plus lent : à garder pour quelques documents. Les signes Wikipédia sont toujours repérés.</small></span></label>
   </fieldset>
+  <details class="api" id="apiBox">
+    <summary>Réglages de l'IA (pour les photos de copies manuscrites)</summary>
+    <div class="apiGrid">
+      <label>Fournisseur<select id="provider"></select></label>
+      <label>Modèle<input id="model" autocomplete="off" spellcheck="false"></label>
+      <label class="wide" id="keyRow">Clé API<input id="apiKey" type="password" autocomplete="off" spellcheck="false"></label>
+      <label class="chk wide" id="rememberRow"><input type="checkbox" id="remember"> Mémoriser la clé sur cet appareil</label>
+    </div>
+    <p class="small">La clé est envoyée uniquement au fournisseur choisi, directement depuis votre navigateur. Elle n'est jamais envoyée au site. Sans « Mémoriser », elle est effacée à la fermeture de l'onglet. Chaque analyse coûte quelques centimes sur votre compte du fournisseur.</p>
+  </details>
   <div class="bar">
     <button class="main" id="lotGo" disabled>Analyser les documents</button>
     <button id="lotCancel" class="hidden">Arrêter</button>

@@ -2,7 +2,9 @@
 import { words } from './heuristics.js';
 import { verdict } from './scoring.js';
 import { extractText, ACCEPT } from './docs.js';
-import { $, esc, store, download, zoneDepot, analyserSurPageTexte } from './commun.js';
+import { $, esc, store, download, zoneDepot, analyserSurPageTexte, initReglagesIA } from './commun.js';
+import { transcrire, estImage } from './manuscrit.js';
+import { rangClasse } from './classe.js';
 import { analyserTexte, loadCalibration, classifierId, cancelWorkers } from './moteur.js';
 
 let docs = [];          // { id, nom, file?, text?, etat, res?, erreur? }
@@ -10,7 +12,8 @@ let abort = null;
 let tri = null;
 let n = 0;
 
-$('lotFile').accept = ACCEPT;
+const ia = initReglagesIA();
+$('lotFile').accept = ACCEPT + ',image/*';
 $('useLmLot').checked = store.get('detia-lot-lm') === '1';
 $('useLmLot').addEventListener('change', e => store.set('detia-lot-lm', e.target.checked ? '1' : '0'));
 
@@ -39,10 +42,10 @@ function dessiner() {
     const E = d.res?.final, H = d.res?.heur;
     const signes = H ? H.found.reduce((a, f) => a + f.ex.length, 0) : '';
     return `<tr data-id="${d.id}">
-      <td class="nom">${esc(d.nom)}</td>
+      <td class="nom">${esc(d.nom)}${d.note ? `<div class="small">${esc(d.note)}</div>` : ''}</td>
       <td class="n">${H ? H.n.toLocaleString('fr-FR') : ''}</td>
       <td class="scorec">${E ? `<span class="pastille ${classe(E.score)}">${E.score} %</span>` : `<span class="small">${esc(d.erreur || ETATS[d.etat])}</span>`}</td>
-      <td>${E ? esc(verdict(E.score)) : ''}</td>
+      <td>${E ? esc(verdict(E.score)) : ''}${E && rangClasse(E.score) ? `<div class="small">Plus élevé que ${Math.round(rangClasse(E.score).part * 100)} % des textes de la classe</div>` : ''}</td>
       <td class="n">${signes}</td>
       <td class="n">${d.res ? `<button class="petit" data-voir="${d.id}">Détail</button>` : ''}</td></tr>`;
   }).join('');
@@ -71,7 +74,14 @@ $('lotGo').addEventListener('click', async () => {
     if (abort.signal.aborted) break;
     if (d.etat !== 'attente' && d.etat !== 'annule') continue;
     try {
-      if (!d.text) { d.etat = 'lecture'; dessiner(); d.text = (await extractText(d.file)).trim(); }
+      if (!d.text) {
+        d.etat = 'lecture'; dessiner();
+        if (estImage(d.file)) {
+          if (!ia.pret() || $('provider').value === 'relais') throw new Error('Photo de copie : ajoutez une clé API dans les réglages de l\'IA pour la transcrire.');
+          const t = await transcrire(ia.cfg(), d.file, abort.signal);
+          d.text = t.texte; d.note = t.resume;
+        } else d.text = (await extractText(d.file)).trim();
+      }
       if (!words(d.text).length) throw new Error('Aucun texte trouvé dans ce fichier.');
       d.etat = 'analyse'; dessiner();
       $('lotEtat').textContent = `Analyse de « ${d.nom} »…`;
@@ -92,10 +102,10 @@ $('lotCancel').addEventListener('click', () => { abort?.abort(); cancelWorkers()
 
 $('lotCsv').addEventListener('click', () => {
   const q = s => `"${String(s).replace(/"/g, '""')}"`;
-  const rows = [['Document', 'Mots', 'Score IA (%)', 'Verdict', 'Confiance', 'Signes Wikipédia', 'Détecteur entraîné (logit)'].map(q).join(';')];
+  const rows = [['Document', 'Mots', 'Score IA (%)', 'Verdict', 'Confiance', 'Signes Wikipédia', 'Détecteur entraîné (logit)', 'Rang dans la classe (%)', 'Remarque'].map(q).join(';')];
   docs.filter(d => d.res).forEach(d => {
     const E = d.res.final, H = d.res.heur;
-    rows.push([d.nom, H.n, E.score, verdict(E.score), E.confidence, H.found.reduce((a, f) => a + f.ex.length, 0), d.res.clf ? d.res.clf.logit.toFixed(2).replace('.', ',') : ''].map(q).join(';'));
+    rows.push([d.nom, H.n, E.score, verdict(E.score), E.confidence, H.found.reduce((a, f) => a + f.ex.length, 0), d.res.clf ? d.res.clf.logit.toFixed(2).replace('.', ',') : '', rangClasse(E.score) ? Math.round(rangClasse(E.score).part * 100) : '', d.note || ''].map(q).join(';'));
   });
   download('analyse-documents.csv', '﻿' + rows.join('\n'), 'text/csv;charset=utf-8');
 });
