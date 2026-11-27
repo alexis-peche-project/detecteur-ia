@@ -79,7 +79,7 @@ def exporter(src, dst):
     fichiers = [f for f in (data / "humains.jsonl", data / "ia.jsonl") if f.exists()]
     noms_onnx = {i.name for i in ort.InferenceSession(str(brut), providers=["CPUExecutionProvider"]).get_inputs()}
     lots = quantifier.entrees(tok, quantifier.textes_de_test(fichiers), noms_onnx)
-    dtype = quantifier.choisir(brut, lots, dst / "onnx" / "model_quantized.onnx")
+    dtype = quantifier.choisir(brut, lots, dst / "onnx")
     quantifier.ecrire_dtype(dst / "config.json", dtype)
 
     if (Path(src) / "metriques.json").exists():
@@ -95,7 +95,7 @@ def verifier(dst, model, tok, textes=("Bonjour, ceci est un petit test.", "Il es
     enc = tok(list(textes), padding=True, return_tensors="pt")
     with torch.no_grad():
         ref = model(**enc).logits.numpy()
-    for f in ("model.onnx", "model_quantized.onnx"):
+    for f in ("model.onnx", "model_quantized.onnx", "model_q4.onnx"):
         if not (Path(dst) / "onnx" / f).exists():
             continue
         sess = ort.InferenceSession(str(Path(dst) / "onnx" / f))
@@ -149,11 +149,12 @@ def main():
         api = HfApi()
         api.create_repo(a.depot, exist_ok=True, repo_type="model")
         api.upload_folder(folder_path=str(dst), repo_id=a.depot, repo_type="model")
-        if not (dst / "onnx" / "model_quantized.onnx").exists():
-            try:  # retire une ancienne version compressée infidèle
-                api.delete_file("onnx/model_quantized.onnx", repo_id=a.depot)
-            except Exception:
-                pass
+        for f in quantifier.FICHIERS.values():
+            if not (dst / "onnx" / f).exists():
+                try:  # retire une ancienne version compressée non retenue
+                    api.delete_file(f"onnx/{f}", repo_id=a.depot)
+                except Exception:
+                    pass
         print(f"Publié sur https://huggingface.co/{a.depot}")
 
 

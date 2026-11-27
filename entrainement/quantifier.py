@@ -73,8 +73,46 @@ def marges(chemin, lots):
     return np.array(res)
 
 
+def mots_en_fp16(src, dst):
+    """Table des mots en demi-précision (deux fois plus légère), relue en précision normale juste après."""
+    import numpy as np
+    import onnx
+    from onnx import helper, numpy_helper
+    m = onnx.load(str(src))
+    g = m.graph
+    inits = {i.name: i for i in g.initializer}
+    nouveaux = []
+    for node in list(g.node):
+        nouveaux.append(node)
+        if node.op_type != "Gather" or node.input[0] not in inits:
+            continue
+        init = inits[node.input[0]]
+        if init.data_type != onnx.TensorProto.FLOAT or np.prod(init.dims) < 1_000_000:
+            continue
+        init.CopyFrom(numpy_helper.from_array(numpy_helper.to_array(init).astype(np.float16), init.name))
+        sortie = node.output[0]
+        node.output[0] = sortie + "_f16"
+        nouveaux.append(helper.make_node("Cast", [node.output[0]], [sortie], to=onnx.TensorProto.FLOAT, name=node.name + "_vers_f32"))
+    del g.node[:]
+    g.node.extend(nouveaux)
+    onnx.save(m, str(dst))
+    return dst
+
+
+def poids_4bits(src, dst):
+    """Poids des multiplications en 4 bits par blocs de 32 (MatMulNBits). Les activations restent
+    en précision normale : contrairement à la compression dynamique 8 bits, les valeurs extrêmes
+    des activations de mmBERT ne sont pas écrasées."""
+    import onnx
+    from onnxruntime.quantization.matmul_nbits_quantizer import MatMulNBitsQuantizer
+    q = MatMulNBitsQuantizer(onnx.load(str(src)), block_size=32, is_symmetric=True, bits=4)
+    q.process()
+    q.model.save_model_to_file(str(dst), False)
+    return dst
+
+
 def candidats(brut, dossier):
-    """Fabrique plusieurs versions compressées en 8 bits (opérations prises en charge partout)."""
+    """Fabrique plusieurs versions compressées. Retourne {nom: (fichier, dtype pour le site)}."""
     import onnx
     from onnxruntime.quantization import QuantType, quantize_dynamic
     dossier = Path(dossier)
@@ -83,49 +121,62 @@ def candidats(brut, dossier):
     q = lambda src, dst, **kw: quantize_dynamic(str(src), str(dossier / dst), weight_type=QuantType.QInt8, **kw) or dossier / dst
     essais = {}
 
-    def essai(nom, fabrique):
+    def essai(nom, dtype, fabrique):
         try:
-            essais[nom] = fabrique()
+            essais[nom] = (fabrique(), dtype)
         except Exception as e:
             print(f"   {nom} : impossible ({type(e).__name__}: {e})", file=sys.stderr)
 
-    # Table des mots compressée ligne par ligne, couches de calcul compressées, tête intacte.
+    # Compression des poids seuls (4 bits), la plus sûre pour mmBERT.
+    essai("poids4+mots16", "q4", lambda: mots_en_fp16(poids_4bits(brut, dossier / "_p4.onnx"), dossier / "poids4+mots16.onnx"))
+    essai("poids4", "q4", lambda: poids_4bits(brut, dossier / "poids4.onnx"))
+    essai("mots16", "q4", lambda: mots_en_fp16(brut, dossier / "mots16.onnx"))
+    # Compression dynamique 8 bits (poids et activations) : plus légère, mais abîme souvent mmBERT.
     def mots_ligne_puis_calcul():
         g = q(brut, "_mots.onnx", per_channel=True, op_types_to_quantize=["Gather"])
         return q(g, "mots_ligne+calcul.onnx", op_types_to_quantize=["MatMul"], nodes_to_exclude=tete)
-    essai("mots_ligne+calcul", mots_ligne_puis_calcul)
-    essai("tout_par_canal_sans_tete", lambda: q(brut, "tout_par_canal_sans_tete.onnx", per_channel=True, nodes_to_exclude=tete))
-    essai("calcul_seul_sans_tete", lambda: q(brut, "calcul_seul_sans_tete.onnx", op_types_to_quantize=["MatMul"], nodes_to_exclude=tete))
-    essai("calcul_seul", lambda: q(brut, "calcul_seul.onnx", op_types_to_quantize=["MatMul"]))
-    essai("defaut", lambda: q(brut, "defaut.onnx"))
+    essai("dyn8_mots_ligne+calcul", "q8", mots_ligne_puis_calcul)
+    essai("dyn8_par_canal_sans_tete", "q8", lambda: q(brut, "tout_par_canal_sans_tete.onnx", per_channel=True, nodes_to_exclude=tete))
+    essai("dyn8_defaut", "q8", lambda: q(brut, "defaut.onnx"))
     return essais
 
 
-def choisir(brut, lots, sortie_q8, tolerance=TOLERANCE):
-    """Retourne 'q8' (et écrit sortie_q8) si une version compressée est fidèle, sinon 'fp32'."""
+FICHIERS = {"q8": "model_quantized.onnx", "q4": "model_q4.onnx"}
+
+
+def choisir(brut, lots, dossier_onnx, tolerance=TOLERANCE):
+    """Garde la version compressée la plus légère qui reste fidèle ; retourne le dtype à charger
+    ('q4', 'q8' ou 'fp32') et écrit le fichier correspondant dans dossier_onnx."""
     import numpy as np
+    dossier_onnx = Path(dossier_onnx)
     ref = marges(brut, lots)
+    # Tolérance : au moins `tolerance`, ou 5 % de l'étendue des marges (les logits de mmBERT vont loin).
+    tol = max(tolerance, 0.05 * float(ref.max() - ref.min()))
     tmp = Path(tempfile.mkdtemp(prefix="quantif-"))
     try:
-        essais = candidats(brut, tmp)
         bilan = []
-        for nom, f in essais.items():
-            m = marges(f, lots)
+        for nom, (f, dtype) in candidats(brut, tmp).items():
+            try:
+                m = marges(f, lots)
+            except Exception as e:
+                print(f"   {nom:26s} illisible par onnxruntime ({type(e).__name__})")
+                continue
             ecart = float(np.abs(m - ref).max())
             accord = float(np.mean((m > 0) == (ref > 0)))
             taille = os.path.getsize(f) / 1e6
-            bilan.append((nom, f, ecart, accord, taille))
+            bilan.append((nom, f, dtype, ecart, accord, taille))
             print(f"   {nom:26s} {taille:7.1f} Mo   écart max {ecart:7.3f}   même verdict {100 * accord:5.1f} %")
-        bons = sorted([b for b in bilan if b[2] <= tolerance], key=lambda b: b[4])
-        print(f"   (modèle non compressé : {os.path.getsize(brut) / 1e6:.1f} Mo, échelle des marges ±{np.abs(ref).max():.1f})")
+        print(f"   (modèle complet : {os.path.getsize(brut) / 1e6:.1f} Mo, marges de {ref.min():.1f} à {ref.max():.1f}, tolérance {tol:.2f})")
+        for d in FICHIERS.values():
+            if (dossier_onnx / d).exists():
+                (dossier_onnx / d).unlink()
+        bons = sorted([b for b in bilan if b[3] <= tol and b[4] >= 0.99], key=lambda b: b[5])
         if bons:
-            nom, f, ecart, _, taille = bons[0]
-            shutil.copy(f, sortie_q8)
-            print(f"→ Version retenue : {nom} ({taille:.0f} Mo, écart max {ecart:.3f})")
-            return "q8"
-        if Path(sortie_q8).exists():
-            Path(sortie_q8).unlink()
-        print(f"→ Aucune version compressée n'est assez fidèle (tolérance {tolerance}) : le site utilisera le modèle complet.")
+            nom, f, dtype, ecart, _, taille = bons[0]
+            shutil.copy(f, dossier_onnx / FICHIERS[dtype])
+            print(f"→ Version retenue : {nom} ({taille:.0f} Mo, écart max {ecart:.3f}), chargée par le site en « {dtype} »")
+            return dtype
+        print("→ Aucune version compressée n'est assez fidèle : le site utilisera le modèle complet.")
         return "fp32"
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -152,7 +203,7 @@ def main():
     from transformers import AutoTokenizer
     import onnxruntime as ort
 
-    dossier = Path(snapshot_download(a.depot, allow_patterns=["*.json", "*.txt", "*.model", "onnx/model.onnx*"]))
+    dossier = Path(snapshot_download(a.depot, allow_patterns=["*.json", "*.txt", "*.model", "onnx/model.onnx"]))
     brut = dossier / "onnx" / "model.onnx"
     tok = AutoTokenizer.from_pretrained(dossier)
     noms = {i.name for i in ort.InferenceSession(str(brut), providers=["CPUExecutionProvider"]).get_inputs()}
@@ -161,7 +212,7 @@ def main():
 
     travail = Path(tempfile.mkdtemp(prefix="republier-"))
     (travail / "onnx").mkdir()
-    dtype = choisir(brut, lots, travail / "onnx" / "model_quantized.onnx", a.tolerance)
+    dtype = choisir(brut, lots, travail / "onnx", a.tolerance)
     shutil.copy(dossier / "config.json", travail / "config.json")
     ecrire_dtype(travail / "config.json", dtype)
     if a.sans_envoi:
@@ -169,11 +220,12 @@ def main():
         return
     api = HfApi()
     api.upload_folder(repo_id=a.depot, folder_path=str(travail), commit_message=f"Compression corrigée (dtype {dtype})")
-    if dtype == "fp32":
-        try:
-            api.delete_file("onnx/model_quantized.onnx", repo_id=a.depot, commit_message="Version compressée infidèle retirée")
-        except Exception:
-            pass
+    for d, f in FICHIERS.items():
+        if d != dtype:  # retire les anciennes versions compressées non retenues
+            try:
+                api.delete_file(f"onnx/{f}", repo_id=a.depot, commit_message="Version compressée non retenue retirée")
+            except Exception:
+                pass
     print(f"Publié sur https://huggingface.co/{a.depot} — le site chargera la version « {dtype} ».")
 
 
