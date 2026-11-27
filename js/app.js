@@ -157,6 +157,23 @@ function stage(id, { on = true, p = 0, msg = '', state = '' } = {}) {
 }
 
 /* ---------- Analyse ---------- */
+/* ---------- Mâchou, la mascotte ---------- */
+const BULLES = {
+  idle: 'Donne-moi un texte à croquer.',
+  chomp: 'Je mâche… je goûte chaque phrase.',
+  humain: 'Ça a un goût d\'humain.',
+  doute: 'Hmm, difficile à dire.',
+  ia: 'Ça a un goût de robot !'
+};
+const miniMascotte = $('mascotteScore');
+if (miniMascotte) miniMascotte.innerHTML = $('mascotte').querySelector('svg').outerHTML.replace('role="img"', 'aria-hidden="true"');
+function humeur(m) {
+  $('mascotte').dataset.mood = m;
+  if (miniMascotte) miniMascotte.dataset.mood = m;
+  $('bulle').textContent = BULLES[m];
+}
+const humeurDuScore = s => s >= 60 ? 'ia' : s >= 40 ? 'doute' : 'humain';
+
 async function analyse() {
   const text = txt.value;
   if (!words(text).length) { txt.focus(); return; }
@@ -166,6 +183,7 @@ async function analyse() {
   const useMeld = !!MELD_URL && lang === 'en' && words(text).length >= 30;
   saveProvider();
   abort = new AbortController();
+  humeur('chomp');
   $('go').disabled = true;
   $('status').classList.remove('hidden');
   $('cancel').classList.remove('hidden');
@@ -249,6 +267,7 @@ async function analyse() {
   await Promise.allSettled(tasks);
   $('go').disabled = false;
   $('cancel').classList.add('hidden');
+  humeur(abort.signal.aborted || !res.final ? 'idle' : humeurDuScore(res.final.score));
 }
 
 $('cancel').addEventListener('click', () => { abort?.abort(); Object.values(workers).forEach(w => w.postMessage({ type: 'cancel' })); });
@@ -313,7 +332,7 @@ function render(res) {
   $('out').classList.remove('hidden');
   const E = combine(res);
   res.final = E;
-  $('pct').textContent = E.score + ' %';
+  $('pct').innerHTML = `${E.score}<small>%</small>`;
   $('verdict').textContent = verdict(E.score);
   const seuilTxt = res.heur.strong ? ' · formule d\'assistant ou artefact de chatbot trouvé' : E.calibrated ? (E.calibrated.flagged1 ? ' · au-delà du seuil à 1 % de faux positifs' : E.calibrated.flagged5 ? ' · au-delà du seuil à 5 % de faux positifs seulement' : ' · sous le seuil de détection') : '';
   $('conf').textContent = 'Confiance : ' + E.confidence + seuilTxt;
