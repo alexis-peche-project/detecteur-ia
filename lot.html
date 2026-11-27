@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analyser plusieurs documents · Détecteur IA</title>
+<meta name="description" content="Analysez plusieurs documents à la fois et obtenez un tableau des scores IA, exportable en CSV.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23111214'/%3E%3Ccircle cx='14' cy='14' r='7' fill='none' stroke='%23b8f5d0' stroke-width='3'/%3E%3Cpath d='M19 19l6 6' stroke='%23b8f5d0' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,800&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top"><div class="wrap topIn">
+  <a class="logo" href="index.html"><svg class="mc logoMc" aria-hidden="true" viewBox="0 0 220 200">
+      <ellipse cx="100" cy="188" rx="62" ry="8" fill="#1D1A4E" opacity=".12"/>
+      <rect x="58" y="156" width="28" height="26" rx="11" fill="#1D1A4E"/>
+      <rect x="114" y="156" width="28" height="26" rx="11" fill="#1D1A4E"/>
+      <rect x="30" y="58" width="140" height="112" rx="42" fill="#FF6B6B"/>
+      <rect x="46" y="88" width="34" height="12" rx="6" fill="#fff" opacity=".35"/>
+      <circle cx="50" cy="122" r="9" fill="#FF9FB0"/><circle cx="150" cy="122" r="9" fill="#FF9FB0"/>
+      <circle cx="72" cy="60" r="24" fill="#fff" stroke="#1D1A4E" stroke-width="5"/>
+      <circle cx="128" cy="60" r="24" fill="#fff" stroke="#1D1A4E" stroke-width="5"/>
+      <g class="pupilles"><circle cx="77" cy="64" r="9" fill="#1D1A4E"/><circle cx="133" cy="64" r="9" fill="#1D1A4E"/></g>
+      <g class="bouche"><rect x="62" y="112" width="76" height="34" rx="14" fill="#1D1A4E"/>
+        <polygon points="68,112 76,124 84,112 92,124 100,112 108,124 116,112 124,124 132,112" fill="#fff"/>
+        <ellipse cx="100" cy="139" rx="16" ry="5" fill="#FF9FB0"/></g>
+      <path class="sourire" d="M70 118 Q100 150 130 118" stroke="#1D1A4E" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <ellipse class="oh" cx="100" cy="130" rx="13" ry="16" fill="#1D1A4E"/>
+      <g class="miette"><rect x="152" y="104" width="56" height="34" rx="9" fill="#FFE27A" stroke="#1D1A4E" stroke-width="4"/>
+        <text x="180" y="128" text-anchor="middle" font-family="Silkscreen, monospace" font-size="17" fill="#1D1A4E">IA</text></g>
+    </svg><span>Détecteur IA</span></a>
+  <nav aria-label="Pages du site"><a href="index.html">Texte</a><a href="lot.html" aria-current="page">Plusieurs documents</a><a href="images.html">Images</a><a href="reecrire.html">Réécrire</a><a href="methode.html">Fiabilité et méthode</a></nav>
+</div></header>
+<main>
+<section class="band hero-band"><div class="wrap">
+  <h1>Analyser plusieurs documents</h1>
+  <p class="lead">Déposez autant de documents que vous voulez (PDF, Word, ODT, TXT…) ou collez plusieurs textes. Chacun est analysé dans votre navigateur, puis un tableau récapitule les scores. Pratique pour une pile de copies ou de candidatures.</p>
+  <div class="drop dropZone" id="lotDrop">
+    <p><b>Déposez vos documents ici</b><br><span class="small">ou</span></p>
+    <label class="btn" for="lotFile">Choisir des fichiers</label>
+    <input type="file" id="lotFile" class="sr" multiple>
+    <div class="dropHint" aria-hidden="true">Déposez les documents ici</div>
+  </div>
+  <details class="api" id="lotPasteBox">
+    <summary>Ou coller plusieurs textes</summary>
+    <label class="sr" for="lotTxt">Textes à analyser</label>
+    <textarea id="lotTxt" placeholder="Collez vos textes ici, séparés par une ligne contenant seulement ---"></textarea>
+    <div class="bar"><button id="lotPaste">Ajouter ces textes</button></div>
+  </details>
+  <fieldset class="opts">
+    <legend class="sr">Méthodes d'analyse</legend>
+    <label class="opt"><input type="checkbox" id="useClfLot" checked>
+      <span><b>Détecteur entraîné</b><small>La méthode la plus fiable. Le modèle est téléchargé une seule fois, puis chaque document prend quelques secondes.</small></span></label>
+    <label class="opt"><input type="checkbox" id="useLmLot">
+      <span><b>Modèle de langage local</b><small>Plus lent : à garder pour quelques documents. Les signes Wikipédia sont toujours repérés.</small></span></label>
+  </fieldset>
+  <div class="bar">
+    <button class="main" id="lotGo" disabled>Analyser les documents</button>
+    <button id="lotCancel" class="hidden">Arrêter</button>
+    <button id="lotSort">Trier par score</button>
+    <button id="lotCsv" disabled>Exporter le tableau (.csv)</button>
+    <button id="lotClear">Vider la liste</button>
+    <span class="count" id="lotEtat" role="status"></span>
+  </div>
+  <p class="small lotBilan" id="lotBilan"></p>
+  <p class="empty" id="lotVide">Aucun document pour l'instant.</p>
+  <div class="scroll"><table id="lotTable" class="lotTable hidden">
+    <thead><tr><th>Document</th><th class="n">Mots</th><th>Score IA</th><th>Verdict</th><th class="n">Signes</th><th class="n"></th></tr></thead>
+    <tbody id="lotRows"></tbody>
+  </table></div>
+  <p class="small">« Détail » ouvre le document dans la page Texte, avec le texte annoté phrase par phrase. Le score d'un document n'est pas une preuve : relisez toujours les passages signalés.</p>
+</div></section>
+</main>
+<footer class="band"><div class="wrap">
+  Vos textes et vos images sont analysés dans votre navigateur : rien n'est envoyé, sauf au fournisseur d'IA que vous choisissez pour la vérification ou la réécriture. Méthode : guide « Signs of AI writing » de Wikipédia, GPTZero (perplexité et burstiness), Fast-DetectGPT (Bao et al., ICLR 2024). Code source sur <a href="https://github.com/alexis-peche-project/detecteur-ia">GitHub</a>, licence MIT.
+</div></footer>
+
+<script type="module" src="js/lot.js"></script>
+</body>
+</html>

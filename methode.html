@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fiabilité et méthode · Détecteur IA</title>
+<meta name="description" content="Comment le détecteur de texte IA fonctionne et quelle est sa fiabilité mesurée sur des textes de test.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23111214'/%3E%3Ccircle cx='14' cy='14' r='7' fill='none' stroke='%23b8f5d0' stroke-width='3'/%3E%3Cpath d='M19 19l6 6' stroke='%23b8f5d0' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,800&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top"><div class="wrap topIn">
+  <a class="logo" href="index.html"><svg class="mc logoMc" aria-hidden="true" viewBox="0 0 220 200">
+      <ellipse cx="100" cy="188" rx="62" ry="8" fill="#1D1A4E" opacity=".12"/>
+      <rect x="58" y="156" width="28" height="26" rx="11" fill="#1D1A4E"/>
+      <rect x="114" y="156" width="28" height="26" rx="11" fill="#1D1A4E"/>
+      <rect x="30" y="58" width="140" height="112" rx="42" fill="#FF6B6B"/>
+      <rect x="46" y="88" width="34" height="12" rx="6" fill="#fff" opacity=".35"/>
+      <circle cx="50" cy="122" r="9" fill="#FF9FB0"/><circle cx="150" cy="122" r="9" fill="#FF9FB0"/>
+      <circle cx="72" cy="60" r="24" fill="#fff" stroke="#1D1A4E" stroke-width="5"/>
+      <circle cx="128" cy="60" r="24" fill="#fff" stroke="#1D1A4E" stroke-width="5"/>
+      <g class="pupilles"><circle cx="77" cy="64" r="9" fill="#1D1A4E"/><circle cx="133" cy="64" r="9" fill="#1D1A4E"/></g>
+      <g class="bouche"><rect x="62" y="112" width="76" height="34" rx="14" fill="#1D1A4E"/>
+        <polygon points="68,112 76,124 84,112 92,124 100,112 108,124 116,112 124,124 132,112" fill="#fff"/>
+        <ellipse cx="100" cy="139" rx="16" ry="5" fill="#FF9FB0"/></g>
+      <path class="sourire" d="M70 118 Q100 150 130 118" stroke="#1D1A4E" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <ellipse class="oh" cx="100" cy="130" rx="13" ry="16" fill="#1D1A4E"/>
+      <g class="miette"><rect x="152" y="104" width="56" height="34" rx="9" fill="#FFE27A" stroke="#1D1A4E" stroke-width="4"/>
+        <text x="180" y="128" text-anchor="middle" font-family="Silkscreen, monospace" font-size="17" fill="#1D1A4E">IA</text></g>
+    </svg><span>Détecteur IA</span></a>
+  <nav aria-label="Pages du site"><a href="index.html">Texte</a><a href="lot.html">Plusieurs documents</a><a href="images.html">Images</a><a href="reecrire.html">Réécrire</a><a href="methode.html" aria-current="page">Fiabilité et méthode</a></nav>
+</div></header>
+<main>
+<section class="band hero-band perf" id="perf"><div class="wrap">
+  <h1>Fiabilité et méthode</h1>
+  <p class="lead" id="perfLead">Chaque méthode est testée sur des textes dont on connaît l'origine, jamais utilisés pour son réglage. On mesure la part de textes d'IA repérés quand on n'accepte qu'un texte humain accusé à tort sur 100, la mesure utilisée par RAID, Pangram et GPTZero.</p>
+  <div id="perfBody"></div>
+</div></section>
+
+<section class="band method"><div class="wrap">
+  <h2>Comment fonctionne l'analyse</h2>
+  <div class="grid3">
+    <div><h3>1. Détecteur entraîné</h3><p>C'est la méthode des grands services (GPTZero, Pangram). Un encodeur multilingue (mmBERT) a été entraîné sur des milliers de textes français écrits par des humains avant 2023 et sur leurs « miroirs » : le même sujet, le même genre et la même longueur, rédigés par plusieurs IA. On le réentraîne ensuite sur ses propres erreurs (recherche d'exemples difficiles). Pour l'anglais, le site interroge aussi MELD, premier détecteur open source du banc d'essai RAID.</p></div>
+    <div><h3>2. Modèle de langage</h3><p>Le texte est lu par Qwen2.5-0.5B, un petit modèle de langage multilingue qui tourne dans votre navigateur. Pour chaque mot, on calcule la probabilité que le modèle l'aurait choisi. Un texte d'IA choisit presque toujours les mots les plus attendus : sa perplexité est basse. La courbure de probabilité (Fast-DetectGPT, ICLR 2024) compare chaque choix aux alternatives possibles ; c'est la mesure la plus fiable des trois. La burstiness mesure la variation de cette perplexité entre les phrases.</p></div>
+    <div><h3>3. Vérification par IA</h3><p>Comme les grands détecteurs commerciaux, le site peut faire relire le texte par un grand modèle (Claude, GPT ou Mistral). Il reçoit les critères du guide Wikipédia, rend une probabilité et cite les passages qui l'ont convaincu. Les longs documents sont envoyés en plusieurs morceaux répartis dans le texte.</p></div>
+    <div><h3>4. Signes Wikipédia et style</h3><p>Le WikiProject AI Cleanup recense les tics des chatbots : vocabulaire gonflé, parallélisme négatif, triplets, remarques éditoriales, conclusions répétées, formules d'assistant, tirets et gras en excès. On mesure aussi la régularité des phrases et des paragraphes.</p></div>
+  </div>
+  <p class="weights" id="weightsNote">Score final : combinaison des méthodes actives, réglée par le banc d'essai (régression logistique). Le verdict « IA » n'est donné qu'au-delà du seuil qui limite les faux positifs à 1 % sur nos textes de test. Une formule d'assistant oubliée ou un artefact de chatbot porte le score à 85 % minimum.</p>
+
+  <details class="calib" id="calib">
+    <summary>Calibration (pour aller plus loin)</summary>
+    <p>Le seuil du modèle de langage est réglé par défaut d'après la littérature. Pour l'ajuster à vos textes, collez quelques textes dont vous connaissez l'origine, séparés par une ligne contenant seulement <code>---</code>. Trois textes de chaque type, de 150 mots ou plus, suffisent pour commencer. Le réglage est gardé sur cet appareil.</p>
+    <div class="calGrid">
+      <label>Textes écrits par des humains<textarea id="calHu"></textarea></label>
+      <label>Textes générés par une IA<textarea id="calAi"></textarea></label>
+    </div>
+    <div class="bar"><button class="main" id="calGo">Calibrer</button><button id="calReset">Revenir au réglage par défaut</button><span class="count" id="calState"></span></div>
+    <div id="calOut"></div>
+  </details>
+
+  <div class="caveat"><strong>À lire avant de conclure.</strong> Aucun détecteur n'est une preuve, y compris les services payants. Les meilleurs outils se trompent encore, surtout sur les textes courts, les textes d'IA retravaillés par un humain, et les textes humains très formels ou écrits par des non-natifs. Wikipédia le rappelle : aucun signe isolé ne suffit, c'est l'accumulation qui compte. Ne fondez jamais une sanction sur ce seul résultat.</div>
+</div></section>
+</main>
+<footer class="band"><div class="wrap">
+  Vos textes et vos images sont analysés dans votre navigateur : rien n'est envoyé, sauf au fournisseur d'IA que vous choisissez pour la vérification ou la réécriture. Méthode : guide « Signs of AI writing » de Wikipédia, GPTZero (perplexité et burstiness), Fast-DetectGPT (Bao et al., ICLR 2024). Code source sur <a href="https://github.com/alexis-peche-project/detecteur-ia">GitHub</a>, licence MIT.
+</div></footer>
+
+<script type="module" src="js/methode.js"></script>
+</body>
+</html>

@@ -126,9 +126,9 @@ footer{color:var(--mute);font-size:13px;border-top:1px solid var(--line)}
 /* ---------- Thème clair « borne d'arcade » et mascotte Mâchou ---------- */
 body{font-family:"Nunito Sans",system-ui,sans-serif}
 h1,h2,h3,.verdict,.card .top b,.card .top span{font-family:"Bricolage Grotesque",system-ui,sans-serif}
-h1{font-weight:800;font-size:clamp(34px,5.4vw,56px);letter-spacing:-.01em;max-width:16ch}
+h1{font-weight:800;font-size:clamp(34px,5.4vw,56px);letter-spacing:-.01em;max-width:20ch}
 h2{font-weight:800}
-.band:first-of-type{background:linear-gradient(180deg,#FFFFFF 0%,var(--bg) 100%)}
+.hero-band{background:linear-gradient(180deg,#FFFFFF 0%,var(--bg) 100%)}
 textarea{background:#fff;border:2px solid var(--line);border-radius:18px}
 textarea:focus,button:focus-visible,.btn:focus-within,select:focus,input:focus-visible{outline:3px solid var(--indigo);outline-offset:2px}
 button,.btn{border:2px solid var(--ink);border-radius:12px;background:#fff;box-shadow:0 3px 0 var(--ink);transition:transform .08s,box-shadow .08s}
@@ -185,3 +185,42 @@ footer{background:#fff}
 @media(max-width:700px){.hero{grid-template-columns:minmax(0,1fr)}.mascotte:not(.mini){flex-direction:row-reverse;justify-content:flex-end;gap:12px;order:-1}.mascotte:not(.mini) .mc{width:110px}.bulle{margin:0}.bulle::after{left:-9px;bottom:auto;top:50%;transform:translateY(-50%) rotate(135deg)}}
 @media(prefers-reduced-motion:reduce){[data-mood=chomp] .mc .bouche,[data-mood=chomp] .mc .miette{animation:none}}
 .big small{font-size:.45em;margin-left:.12em;vertical-align:.55em}
+
+/* ---------- En-tête et navigation entre les pages ---------- */
+.top{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:2px solid var(--line);padding:0 max(5vw,16px)}
+.topIn{display:flex;align-items:center;gap:18px;min-height:64px}
+.logo{display:flex;align-items:center;gap:8px;text-decoration:none;font:800 19px "Bricolage Grotesque",sans-serif;white-space:nowrap}
+.logoMc{width:44px;height:auto}
+.logoMc .miette,.logoMc .sourire,.logoMc .oh{display:none}
+.top nav{display:flex;gap:4px;margin-left:auto;overflow-x:auto;scrollbar-width:none}
+.top nav a{flex:none;padding:8px 14px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px;white-space:nowrap;color:var(--ink)}
+.top nav a:hover{background:var(--bg)}
+.top nav a[aria-current=page]{background:var(--mint);box-shadow:inset 0 0 0 2px var(--ink)}
+@media(max-width:820px){.topIn{flex-wrap:wrap;gap:4px;padding:8px 0}.top nav{margin-left:0;width:100%}.logo span{font-size:17px}}
+
+/* ---------- Pages Plusieurs documents et Images ---------- */
+.dropZone{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:190px;border:2.5px dashed var(--line);border-radius:20px;background:#fff;text-align:center;padding:20px}
+.dropZone.over{border-color:var(--indigo)}
+.dropZone p{margin:0}
+.opts.one{grid-template-columns:minmax(0,1fr)}
+.count.left{margin-left:0}
+h2.sous,h3.sous{margin-top:28px}
+.lotBilan{margin:14px 0 0;font-weight:600;color:var(--ink)}
+.lotTable{background:#fff;border:2px solid var(--line);border-radius:14px;overflow:hidden}
+.lotTable td.nom{max-width:340px;overflow-wrap:anywhere;font-weight:600}
+.pastille{display:inline-block;min-width:64px;text-align:center;padding:3px 10px;border-radius:999px;font:700 15px "Silkscreen",monospace;border:2px solid var(--ink)}
+.pastille.ia{background:var(--rose)}.pastille.doute{background:var(--mint)}.pastille.humain{background:#C9F2DC}
+button.petit{min-height:36px;padding:0 12px;font-size:14px;box-shadow:0 2px 0 var(--ink)}
+.imgList{display:grid;gap:16px;margin-top:16px}
+.imgCard{display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px;background:#fff;border:2px solid var(--ink);border-radius:18px;padding:16px;box-shadow:0 4px 0 var(--ink)}
+.imgCard img{width:100%;max-height:260px;object-fit:contain;border-radius:10px;background:var(--bg)}
+.imgCard h3{overflow-wrap:anywhere}
+.imgVerdict{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:12px;border:2px solid var(--ink);margin:8px 0}
+.imgVerdict b{font:800 19px "Bricolage Grotesque",sans-serif}
+.imgVerdict.ia{background:var(--rose)}.imgVerdict.doute{background:var(--mint)}.imgVerdict.humain{background:#C9F2DC}.imgVerdict.neutre{background:var(--bg)}
+.constats{list-style:none;margin:10px 0 0;padding:0}
+.constats li{display:flex;flex-direction:column;padding:8px 0 8px 12px;border-left:4px solid var(--line);margin-bottom:6px}
+.constats li.ia{border-left-color:var(--coral)}.constats li.photo{border-left-color:var(--leaf)}
+.constats span{color:var(--mute);font-size:14px}
+.suite p{max-width:80ch;color:var(--mute);margin:0}
+@media(max-width:700px){.imgCard{grid-template-columns:minmax(0,1fr)}}
