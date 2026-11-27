@@ -29,11 +29,14 @@ async function load(id) {
     const cfg = await (await fetch(`https://huggingface.co/${id}/resolve/main/config.json`)).json();
     dtype = cfg?.['transformers.js_config']?.dtype || 'fp32';
   } catch { /* garder fp32 */ }
-  try {
-    model = await AutoModelForSequenceClassification.from_pretrained(id, { device, dtype, progress_callback });
-  } catch (e) {
-    model = await AutoModelForSequenceClassification.from_pretrained(id, { device: 'wasm', dtype, progress_callback });
+  // Version annoncée sur la carte graphique, puis sur le processeur, puis version complète en dernier recours.
+  const essais = [{ device, dtype }, { device: 'wasm', dtype }, ...(dtype !== 'fp32' ? [{ device: 'wasm', dtype: 'fp32' }] : [])];
+  let derniere;
+  for (const o of essais) {
+    try { model = await AutoModelForSequenceClassification.from_pretrained(id, { ...o, progress_callback }); break; }
+    catch (e) { derniere = e; }
   }
+  if (!model) throw derniere;
   loadedId = id;
   postMessage({ type: 'ready' });
 }
