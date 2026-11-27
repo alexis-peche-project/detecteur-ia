@@ -15,6 +15,8 @@ import shutil
 from pathlib import Path
 
 ICI = Path(__file__).resolve().parent
+import sys
+sys.path.insert(0, str(ICI))
 
 
 class _Logits:
@@ -39,7 +41,6 @@ class _Logits:
 
 def exporter(src, dst):
     import torch
-    from onnxruntime.quantization import QuantType, quantize_dynamic
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
     dst = Path(dst)
@@ -69,7 +70,17 @@ def exporter(src, dst):
         except TypeError:  # anciennes versions de PyTorch sans l'option dynamo
             torch.onnx.export(_Logits(model), args, str(brut), input_names=noms, output_names=["logits"],
                               dynamic_axes=axes, opset_version=17, do_constant_folding=True)
-    quantize_dynamic(str(brut), str(dst / "onnx" / "model_quantized.onnx"), weight_type=QuantType.QInt8)
+    # Compression 8 bits contrôlée : plusieurs réglages essayés, le plus léger qui reste fidèle est gardé
+    # (la compression par défaut d'onnxruntime abîme mmBERT). Sinon le site utilise le modèle complet.
+    import os
+    import onnxruntime as ort
+    import quantifier
+    data = Path(os.environ.get("DETIA_DATA", ICI / "donnees"))
+    fichiers = [f for f in (data / "humains.jsonl", data / "ia.jsonl") if f.exists()]
+    noms_onnx = {i.name for i in ort.InferenceSession(str(brut), providers=["CPUExecutionProvider"]).get_inputs()}
+    lots = quantifier.entrees(tok, quantifier.textes_de_test(fichiers), noms_onnx)
+    dtype = quantifier.choisir(brut, lots, dst / "onnx" / "model_quantized.onnx")
+    quantifier.ecrire_dtype(dst / "config.json", dtype)
 
     if (Path(src) / "metriques.json").exists():
         shutil.copy(Path(src) / "metriques.json", dst / "metriques.json")
@@ -85,6 +96,8 @@ def verifier(dst, model, tok, textes=("Bonjour, ceci est un petit test.", "Il es
     with torch.no_grad():
         ref = model(**enc).logits.numpy()
     for f in ("model.onnx", "model_quantized.onnx"):
+        if not (Path(dst) / "onnx" / f).exists():
+            continue
         sess = ort.InferenceSession(str(Path(dst) / "onnx" / f))
         noms = {i.name for i in sess.get_inputs()}
         out = sess.run(None, {k: v.numpy() for k, v in enc.items() if k in noms})[0]
@@ -136,6 +149,11 @@ def main():
         api = HfApi()
         api.create_repo(a.depot, exist_ok=True, repo_type="model")
         api.upload_folder(folder_path=str(dst), repo_id=a.depot, repo_type="model")
+        if not (dst / "onnx" / "model_quantized.onnx").exists():
+            try:  # retire une ancienne version compressée infidèle
+                api.delete_file("onnx/model_quantized.onnx", repo_id=a.depot)
+            except Exception:
+                pass
         print(f"Publié sur https://huggingface.co/{a.depot}")
 
 

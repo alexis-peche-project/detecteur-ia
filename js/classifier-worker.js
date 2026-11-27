@@ -21,10 +21,17 @@ async function load(id) {
   let device = 'wasm';
   try { if (self.navigator?.gpu && await navigator.gpu.requestAdapter()) device = 'webgpu'; } catch { /* pas de WebGPU */ }
   tok = await AutoTokenizer.from_pretrained(id, { progress_callback });
+  // Version du modèle à charger (compressée « q8 » ou complète « fp32 »), choisie à l'export
+  // après contrôle de précision et indiquée dans config.json.
+  let dtype = 'q8';
   try {
-    model = await AutoModelForSequenceClassification.from_pretrained(id, { device, dtype: 'q8', progress_callback });
+    const cfg = await (await fetch(`https://huggingface.co/${id}/resolve/main/config.json`)).json();
+    dtype = cfg?.['transformers.js_config']?.dtype || 'q8';
+  } catch { /* garder q8 */ }
+  try {
+    model = await AutoModelForSequenceClassification.from_pretrained(id, { device, dtype, progress_callback });
   } catch (e) {
-    model = await AutoModelForSequenceClassification.from_pretrained(id, { device: 'wasm', dtype: 'q8', progress_callback });
+    model = await AutoModelForSequenceClassification.from_pretrained(id, { device: 'wasm', dtype, progress_callback });
   }
   loadedId = id;
   postMessage({ type: 'ready' });
