@@ -271,3 +271,25 @@ mark.commun{background:var(--mint);border:0;color:inherit;border-radius:3px}
 #trCode{width:220px;font-family:ui-monospace,monospace}
 @media(max-width:900px){.etapes{grid-template-columns:repeat(2,minmax(0,1fr))}.duo{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){.etapes{grid-template-columns:minmax(0,1fr)}.resist{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- Analyse visuelle des images ---------- */
+.imgCadre{position:relative;align-self:start}
+.imgCadre img{display:block}
+.zones{position:absolute;inset:0;pointer-events:none}
+.imgCard img{max-height:none}
+.imgCard:not(.large) .imgCadre img{max-height:260px}
+.imgCard.large{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
+.imgCard.large .imgCadre{position:sticky;top:84px}
+.zone{position:absolute;border:3px solid var(--coral);border-radius:8px;box-shadow:0 0 0 2px #fff;pointer-events:auto;transition:background .15s}
+.zone b{position:absolute;top:-12px;left:-12px;width:24px;height:24px;border-radius:50%;background:var(--coral);color:#fff;font:700 13px/24px "Nunito Sans",sans-serif;text-align:center;border:2px solid #fff}
+.zone.actif{background:rgba(255,107,107,.28)}
+.vision{margin-top:12px;padding:12px 14px;border:2px solid var(--line);border-radius:12px}
+.vision p{margin:0 0 8px}
+.vision h4{margin:10px 0 4px;font:800 15px "Bricolage Grotesque",sans-serif}
+.indices{margin:0;padding:0;list-style:none}
+.indices li{display:flex;flex-direction:column;padding:6px 8px;border-radius:8px}
+.indices li.actif{background:var(--rose)}
+.indices li span{color:var(--mute);font-size:14px}
+.indices .num{display:inline-block;width:20px;height:20px;border-radius:50%;background:var(--coral);color:#fff;font-size:12px;line-height:20px;text-align:center;margin-right:6px}
+.indices.reels li b{color:var(--leaf)}
+@media(max-width:900px){.imgCard.large{grid-template-columns:minmax(0,1fr)}.imgCard.large .imgCadre{position:relative;top:0}}

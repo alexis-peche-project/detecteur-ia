@@ -43,11 +43,23 @@
     <input type="file" id="imgFile" class="sr" multiple>
     <div class="dropHint" aria-hidden="true">Déposez les images ici</div>
   </div>
-  <fieldset class="opts one">
+  <fieldset class="opts">
     <legend class="sr">Méthodes</legend>
     <label class="opt"><input type="checkbox" id="useImgModel" checked>
       <span><b>Détecteur open source</b><small>Réseau de neurones SMOGY (licence non commerciale), téléchargé une seule fois. Il repère bien les générateurs anciens, beaucoup moins les plus récents : son avis n'est qu'un indice.</small></span></label>
+    <label class="opt"><input type="checkbox" id="useImgVision">
+      <span><b>Analyse visuelle par IA</b><small>Claude, GPT ou Mistral examine l'image zone par zone (feuillages, textures, lumière, textes, mains…) et entoure les détails suspects. Nécessite votre clé API, quelques centimes par image.</small></span></label>
   </fieldset>
+  <details class="api" id="apiBox">
+    <summary>Réglages de l'IA (vérification et réécriture)</summary>
+    <div class="apiGrid">
+      <label>Fournisseur<select id="provider"></select></label>
+      <label>Modèle<input id="model" autocomplete="off" spellcheck="false"></label>
+      <label class="wide" id="keyRow">Clé API<input id="apiKey" type="password" autocomplete="off" spellcheck="false"></label>
+      <label class="chk wide" id="rememberRow"><input type="checkbox" id="remember"> Mémoriser la clé sur cet appareil</label>
+    </div>
+    <p class="small">La clé est envoyée uniquement au fournisseur choisi, directement depuis votre navigateur. Elle n'est jamais envoyée au site. Sans « Mémoriser », elle est effacée à la fermeture de l'onglet. Chaque analyse coûte quelques centimes sur votre compte du fournisseur.</p>
+  </details>
   <p class="count left" id="imgEtat" role="status"></p>
   <p class="empty" id="imgVide">Aucune image pour l'instant.</p>
   <div id="imgList" class="imgList"></div>
