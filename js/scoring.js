@@ -41,12 +41,21 @@ export function ensemble(parts, { strongSign = false, words = 0 } = {}) {
 // Combinaison réglée par le banc d'essai (régression logistique sur la partie « val »).
 // features : { clf: logit, lm: D, heur: 0..1, juge: 0..1 }. Renvoie null si aucun réglage ne correspond.
 export function calibratedEnsemble(calibration, features) {
-  const avail = Object.keys(features).filter(k => Number.isFinite(features[k])).sort();
-  const ens = calibration?.ensembles?.[avail.join('+')];
-  if (!ens) return null;
+  const avail = new Set(Object.keys(features).filter(k => Number.isFinite(features[k])));
+  // Parmi les combinaisons réglées au banc d'essai dont toutes les méthodes sont disponibles,
+  // on garde celle qui repère le plus d'IA à 1 % de faux positifs sur le test (à égalité, la plus simple).
+  // Une méthode qui n'apporte rien n'est donc pas ajoutée juste parce qu'elle a tourné.
+  let best = null;
+  for (const [key, ens] of Object.entries(calibration?.ensembles || {})) {
+    if (!ens.features.every(f => avail.has(f))) continue;
+    const note = (ens.tpr_1pc_test ?? 0) - 0.001 * ens.features.length;
+    if (!best || note > best.note) best = { key, ens, note };
+  }
+  if (!best) return null;
+  const { key, ens } = best;
   const z = ens.features.reduce((a, f, i) => a + ens.coef[i] * features[f], ens.intercept);
   const p = sigmoid(z);
-  return { p, key: avail.join('+'), seuil1: ens.seuil_1pc, seuil5: ens.seuil_5pc, flagged1: p > ens.seuil_1pc, flagged5: p > ens.seuil_5pc, tpr1: ens.tpr_1pc_test, auroc: ens.auroc_test };
+  return { p, key, features: ens.features, seuil1: ens.seuil_1pc, seuil5: ens.seuil_5pc, flagged1: p > ens.seuil_1pc, flagged5: p > ens.seuil_5pc, tpr1: ens.tpr_1pc_test, auroc: ens.auroc_test };
 }
 
 // Détection simple de la langue (français, anglais ou autre) par mots outils.

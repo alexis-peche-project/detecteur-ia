@@ -87,11 +87,9 @@ export function combine(res) {
   if (res.judge) f.juge = res.judge.probabilite_ia / 100;
   let E = null;
   let cal = calibratedEnsemble(CAL, f);
-  if (!cal && Number.isFinite(f.juge)) {
-    // Vérification par IA non mesurée par le banc d'essai : combinaison réglée sans elle, puis mélange simple.
-    const { juge, ...sans } = f;
-    const c2 = calibratedEnsemble(CAL, sans);
-    if (c2) cal = { ...c2, p: (1 - WEIGHTS.judge) * c2.p + WEIGHTS.judge * juge };
+  if (cal && Number.isFinite(f.juge) && !cal.features.includes('juge')) {
+    // Vérification par IA non mesurée par le banc d'essai : mélange simple avec la combinaison réglée.
+    cal = { ...cal, p: (1 - WEIGHTS.judge) * cal.p + WEIGHTS.judge * f.juge };
   }
   if (cal) {
     // Les seuils mesurés au banc d'essai deviennent les limites des verdicts :
