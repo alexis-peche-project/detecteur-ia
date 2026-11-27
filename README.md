@@ -54,7 +54,12 @@ Le site est statique : **ne mettez jamais de clé API dans le code**, elle serai
 ```
 index.html          page
 css/style.css       styles
-js/app.js           interface et orchestration
+index.html, lot.html, images.html, reecrire.html, methode.html   les 5 pages du site
+js/commun.js        outils partagés (réglages de l'IA, mascotte, dépôt de fichiers)
+js/moteur.js        moteur d'analyse de texte (utilisé par Texte et Plusieurs documents)
+js/texte.js, js/lot.js, js/images.js, js/reecrire.js, js/methode.js   script de chaque page
+js/meta-image.js    marques d'origine des images (C2PA, IPTC, paramètres de génération, EXIF)
+js/image-worker.js  détecteur d'images open source dans le navigateur
 js/classifier-worker.js  détecteur entraîné (Web Worker)
 js/lm-worker.js     modèle de langage (Web Worker)
 js/scoring.js       calcul des scores, combinaison, calibration
