@@ -76,5 +76,29 @@ $('calGo').addEventListener('click', async () => {
   calState();
 });
 
+/* ---------- Test indépendant (textes jamais vus, autres genres, autres IA) ---------- */
+async function renderTest() {
+  let T = null;
+  try { const r = await fetch('resultats/test_independant.json', { cache: 'no-cache' }); if (r.ok) T = await r.json(); } catch { /* pas encore de test */ }
+  const el = $('testBody');
+  if (!el) return;
+  if (!T) { el.innerHTML = '<p>Pas encore de test indépendant publié.</p>'; return; }
+  const ligne = (nom, t) => t?.taux == null ? '' : `<tr><td>${esc(nom)}</td><td class="n">${t.n}</td>${barre(t.taux)}<td class="n">${pc(t.taux)}</td></tr>`;
+  const bloc = (titre, ent, obj) => obj && Object.keys(obj).length ? tableau(titre, `<th>${ent}</th><th class="n">Textes</th><th colspan="2">Taux</th>`, Object.entries(obj).map(([k, v]) => ligne(k, v)).join('')) : '';
+  el.innerHTML = `<div class="scroll"><table><tbody>
+      ${ligne('Textes d\'IA repérés (score ≥ 60 %)', T.ia_reperee)}
+      ${ligne('Textes d\'IA repérés ou jugés incertains (≥ 40 %)', T.ia_reperee_ou_incertain)}
+      ${ligne('Textes humains accusés à tort (≥ 60 %)', T.humains_accuses)}
+      ${ligne('Textes humains jugés incertains (40 à 60 %)', T.humains_incertains)}
+    </tbody></table></div>
+    ${bloc('IA repérée, par modèle', 'Modèle', T.ia_reperee_par_generateur)}
+    ${bloc('IA repérée, selon la consigne', 'Consigne', T.ia_reperee_par_consigne)}
+    ${bloc('Fausses alertes, par genre de texte humain', 'Genre', T.fausses_alertes_par_genre)}
+    ${bloc('Fausses alertes, selon la longueur', 'Longueur', T.fausses_alertes_par_longueur)}
+    ${bloc('Textes mixtes (moitié humain, moitié IA)', 'Résultat', T.textes_mixtes)}
+    <p class="small">Mesuré le ${esc(T.date)} sur ${T.n_humains} textes humains et ${T.n_ia} textes d'IA que le détecteur n'avait jamais vus${T.auroc != null ? ` (AUROC ${fmt(T.auroc, 3)})` : ''}. Modèles absents de l'entraînement : ${esc((T.generateurs || []).join(', '))}.</p>`;
+}
+
 loadCalibration().then(calState);
 renderPerf();
+renderTest();

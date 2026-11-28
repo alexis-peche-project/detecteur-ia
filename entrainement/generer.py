@@ -17,6 +17,7 @@ Générateurs (option --generateurs, séparés par des virgules) :
   anthropic:<modèle>              clé dans ANTHROPIC_API_KEY
   openai:<modèle>                 clé dans OPENAI_API_KEY
   mistral:<modèle>                clé dans MISTRAL_API_KEY
+  gemini:<modèle>                 clé dans GEMINI_API_KEY
   factice                         pour les tests, sans modèle
 
 Sortie : donnees/ia.jsonl (ajout à la suite ; les miroirs déjà créés sont sautés)
@@ -209,7 +210,7 @@ class CleRefusee(Exception):
 
 def _api_call(fournisseur, modele, j, max_tokens=4000):
     import requests
-    for essai in range(5):
+    for essai in range(8):
         try:
             if fournisseur == "anthropic":
                 r = requests.post("https://api.anthropic.com/v1/messages", timeout=120, headers={
@@ -221,6 +222,14 @@ def _api_call(fournisseur, modele, j, max_tokens=4000):
                           "messages": [{"role": "user", "content": j["prompt"]}]})
                 r.raise_for_status()
                 return "".join(c.get("text", "") for c in r.json()["content"])
+            if fournisseur == "gemini":
+                r = requests.post(f"https://generativelanguage.googleapis.com/v1beta/models/{modele}:generateContent", timeout=180,
+                                  headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"], "content-type": "application/json"},
+                                  json={"contents": [{"role": "user", "parts": [{"text": j["prompt"]}]}],
+                                        "generationConfig": {"maxOutputTokens": max_tokens}})
+                r.raise_for_status()
+                parts = (r.json().get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+                return "".join(p.get("text", "") for p in parts if not p.get("thought"))
             url = {"openai": "https://api.openai.com/v1/chat/completions",
                    "mistral": "https://api.mistral.ai/v1/chat/completions"}[fournisseur]
             cle = os.environ["OPENAI_API_KEY" if fournisseur == "openai" else "MISTRAL_API_KEY"]
@@ -236,7 +245,7 @@ def _api_call(fournisseur, modele, j, max_tokens=4000):
             if code in (400, 401, 402, 403, 404):
                 # Erreur définitive (clé, crédit, modèle inconnu…) : inutile de réessayer.
                 raise CleRefusee(f"{fournisseur} refuse la demande (erreur {code}) : {detail}") from e
-            attente = 2 ** essai * 3
+            attente = min(120, 2 ** essai * (10 if code == 429 else 3))
             print(f"   {fournisseur} : {e} ; nouvel essai dans {attente} s", file=sys.stderr)
             time.sleep(attente)
         except Exception as e:
@@ -246,7 +255,12 @@ def _api_call(fournisseur, modele, j, max_tokens=4000):
     return ""
 
 
-def backend_api(jobs, sauver, fournisseur, modele, workers=6, **_):
+# Offres gratuites (Gemini, Mistral) : peu de demandes par seconde, donc un appel à la fois.
+TRAVAILLEURS = {"gemini": 1, "mistral": 1}
+
+
+def backend_api(jobs, sauver, fournisseur, modele, workers=None, **_):
+    workers = workers or int(os.environ.get(f"DETIA_TRAVAILLEURS_{fournisseur.upper()}", TRAVAILLEURS.get(fournisseur, 6)))
     # Un premier appel seul vérifie la clé avant de lancer tous les travaux.
     _api_call(fournisseur, modele, {**jobs[0], "prompt": "Réponds seulement : ok", "temperature": 0}, max_tokens=1024)
     with ThreadPoolExecutor(workers) as ex:
